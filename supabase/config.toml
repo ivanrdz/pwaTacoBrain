@@ -1,0 +1,5 @@
+# Configuración mínima para la CLI de Supabase (supabase link / db push / functions deploy).
+project_id = "taco-brain"
+
+[functions.leer-ticket]
+verify_jwt = true
