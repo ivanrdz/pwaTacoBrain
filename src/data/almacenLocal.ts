@@ -68,6 +68,10 @@ const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export function crearAlmacenLocal(): Almacen & { cargarSemanaDeEjemplo(): Promise<void> } {
   return {
     modo: 'demo',
+    pendientes: () => 0,
+    async cerrarSesion() {
+      /* en demo no hay sesión */
+    },
 
     async nombreNegocio() {
       return leer(K.negocio, 'Mi taquería');

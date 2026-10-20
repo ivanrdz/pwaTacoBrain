@@ -3,3 +3,11 @@ project_id = "taco-brain"
 
 [functions.leer-ticket]
 verify_jwt = true
+
+# Sin registro abierto: las cuentas de cada taquería las crea el administrador.
+# (En el proyecto en la nube también hay que apagarlo en Authentication → Sign In / Providers.)
+[auth]
+enable_signup = false
+
+[auth.email]
+enable_signup = false

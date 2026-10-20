@@ -202,6 +202,10 @@ export type Modo = 'demo' | 'nube';
 
 export interface Almacen {
   modo: Modo;
+  /** Movimientos guardados en el celular que todavía no se suben */
+  pendientes(): number;
+  /** Cierra la sesión y borra los datos guardados en el celular */
+  cerrarSesion(): Promise<void>;
   nombreNegocio(): Promise<string>;
   guardarNombreNegocio(nombre: string): Promise<void>;
   config(): Promise<ConfigFinanzas>;

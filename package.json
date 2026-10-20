@@ -6,10 +6,13 @@
   "description": "TacoBrain: punto de venta, captura de tickets por foto y reportes por voz para taquerías",
   "scripts": {
     "dev": "vite --host",
-    "build": "tsc -b && vite build",
+    "build": "tsc -p tsconfig.json && vite build",
     "preview": "vite preview --host",
-    "typecheck": "tsc -b --noEmit",
-    "test": "vitest run"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "secretos": "secretlint --maskSecrets \"**/*\"",
+    "revisar": "npm run secretos && npm run typecheck && npm test",
+    "prepare": "husky"
   },
   "dependencies": {
     "@fontsource/bricolage-grotesque": "^5.2.0",
@@ -19,12 +22,19 @@
     "react-dom": "^19.1.9"
   },
   "devDependencies": {
+    "@secretlint/secretlint-rule-pattern": "^10.2.2",
+    "@secretlint/secretlint-rule-preset-recommend": "^10.2.2",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.7.0",
+    "husky": "^9.1.7",
+    "secretlint": "^10.2.2",
     "typescript": "~5.9.3",
     "vite": "^6.4.4",
     "vite-plugin-pwa": "^1.0.0",
     "vitest": "^3.2.7"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

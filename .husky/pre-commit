@@ -1,0 +1,11 @@
+# Antes de cada commit: nunca subir archivos .env ni llaves.
+
+ARCHIVOS=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$ARCHIVOS" ] && exit 0
+
+if echo "$ARCHIVOS" | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example$' >/dev/null; then
+  echo "No subas archivos .env: tienen llaves. Quitalo con: git restore --staged <archivo>"
+  exit 1
+fi
+
+echo "$ARCHIVOS" | grep -v -E '\.(png|jpg|jpeg|webp|ico)$|package-lock\.json$' | tr '\n' '\0' | xargs -0 -r npx --no-install secretlint --maskSecrets

@@ -46,33 +46,62 @@ En **Mis productos → Llenar con una semana de ejemplo** se cargan ventas y gas
 
 > La cámara y el micrófono del celular solo funcionan en HTTPS (o en `localhost`). Para probarlos en el celular, publícala en Vercel (abajo) o usa un túnel como `cloudflared`.
 
-Pruebas y revisión de tipos:
+Pruebas, tipos y búsqueda de llaves (lo mismo que corre el CI):
 
 ```bash
-npm test
-npm run typecheck
+npm run revisar
 ```
 
 ## Modo nube (Supabase)
 
 1. Crea un proyecto en [supabase.com](https://supabase.com).
-2. Crea las tablas: en el **SQL Editor** ejecuta, en orden, `supabase/migrations/20261010000000_inicio.sql` y `supabase/migrations/20261020000000_finanzas_inventario.sql`. (O con la CLI: `supabase link --project-ref <ref>` y `supabase db push`.)
-3. Publica la función que lee los tickets y guarda la llave del modelo de visión:
+2. Crea las tablas: en el **SQL Editor** ejecuta, en orden, los tres archivos de `supabase/migrations/` (`…_inicio.sql`, `…_finanzas_inventario.sql`, `…_seguridad.sql`). (O con la CLI: `supabase link --project-ref <ref>` y `supabase db push`.)
+3. **Apaga el registro abierto:** Authentication → Sign In / Providers → desactiva "Allow new users to sign up". Las cuentas de cada taquería las creas tú en Authentication → Users → Add user.
+4. Publica la función que lee los tickets y guarda sus secretos (en Supabase, nunca en el repo):
 
    ```bash
    supabase functions deploy leer-ticket
-   supabase secrets set PROVEEDOR_IA=anthropic ANTHROPIC_API_KEY=sk-ant-...
-   # o con OpenAI:
-   # supabase secrets set PROVEEDOR_IA=openai OPENAI_API_KEY=sk-...
-   # Opcional, para cambiar de modelo: supabase secrets set MODELO_IA=<modelo>
+   supabase secrets set PROVEEDOR_IA=anthropic ANTHROPIC_API_KEY=<tu llave>
+   supabase secrets set ORIGENES_PERMITIDOS=https://<tu-app>.vercel.app
+   # Opcionales: LIMITE_LECTURAS_DIA=50 (por cuenta al día), MODELO_IA=<modelo>
+   # Con OpenAI: PROVEEDOR_IA=openai OPENAI_API_KEY=<tu llave>
    ```
 
-4. Copia `.env.example` a `.env.local` y pon la URL y la anon key del proyecto (Project Settings → API).
-5. `npm run dev`. La app pedirá correo y contraseña una sola vez; la sesión queda guardada en el celular.
+5. Copia `.env.example` a `.env.local` y pon la URL y la anon key del proyecto (Project Settings → API). `.env.local` nunca se sube al repo.
+6. `npm run dev`. La app pedirá correo y contraseña una sola vez; la sesión queda guardada en el celular.
 
 Cada taquería es una cuenta. Las políticas RLS hacen que cada cuenta vea solo sus productos, ventas y gastos, así que la misma instalación sirve para vender el sistema a varias taquerías.
 
-Si no quieres que cualquiera cree cuentas, desactiva el registro en Supabase (Authentication → Providers → Email → "Allow new users to sign up") y crea tú las cuentas de tus clientes.
+## Seguridad
+
+**Llaves**
+
+- La llave del modelo de IA vive solo en los secretos de Supabase; el celular nunca la ve.
+- La *anon key* de Supabase sí va en el frontend: es pública por diseño. Lo que protege los datos son las políticas RLS (cada cuenta solo ve lo suyo). La *service_role* nunca se usa en este proyecto: no la pongas en `.env` ni en Vercel.
+- `.env`, `.env.local` y similares están en `.gitignore`.
+- **Antes de cada commit** (husky + secretlint) se bloquea cualquier archivo `.env` y cualquier llave de Claude, OpenAI, Supabase, AWS, GitHub, llaves privadas o URLs de base de datos con contraseña. Para revisar a mano: `npm run secretos`.
+- **En GitHub Actions** cada push corre secretlint y gitleaks sobre todo el historial, además de tipos, pruebas, build y `npm audit`.
+- Si una llave se llega a filtrar: **revócala de inmediato** en el panel del proveedor y crea otra. Borrarla del repo no basta.
+
+**Datos**
+
+- RLS en todas las tablas; el rol anónimo no tiene acceso a ninguna.
+- Sin registro abierto: solo entran cuentas que tú creas.
+- Fotos de tickets en un bucket privado, cada cuenta en su carpeta, máximo 5 MB y solo imágenes.
+- La cola sin internet es por cuenta: si entra otra cuenta en el mismo celular, nunca ve ni sube lo de la anterior. Al cerrar sesión se borra todo lo guardado en el celular (y avisa si hay movimientos sin subir).
+- Mensajes de error genéricos al entrar, para no revelar qué correos tienen cuenta.
+
+**Función de tickets**
+
+- Solo acepta usuarios con sesión (JWT) y llamadas desde los dominios de `ORIGENES_PERMITIDOS`.
+- Límite diario de lecturas por cuenta (`LIMITE_LECTURAS_DIA`, 50 por defecto), contado en la base antes de pagar al modelo.
+- Valida tamaño y tipo de imagen, y valida y recorta todo lo que regresa el modelo.
+
+**Navegador** (`vercel.json`)
+
+- Content-Security-Policy estricta (solo scripts propios y conexiones a Supabase), sin iframes de terceros (`frame-ancestors 'none'`), HSTS, `nosniff`, y cámara y micrófono solo para la app.
+
+**Pendiente en GitHub (manual):** con el repo privado, el escaneo de secretos de GitHub es de pago; por eso el proyecto trae su propio escáner (secretlint y gitleaks).
 
 ## Publicar (Vercel)
 

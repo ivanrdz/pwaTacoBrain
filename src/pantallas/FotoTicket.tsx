@@ -68,7 +68,9 @@ export function FotoTicket({ regresar }: { regresar: () => void }) {
       setTotal(null);
       setCategoria('insumos');
       setItems([]);
-      if ((e as Error)?.message === 'sin-lector') setProblema('En esta demo escribe el total. En la versión final se lee solo de la foto.');
+      const motivo = (e as Error)?.message;
+      if (motivo === 'sin-lector') setProblema('En esta demo escribe el total. En la versión final se lee solo de la foto.');
+      else if (motivo === 'limite-ia') setProblema('Hoy ya se leyeron muchos tickets. Escribe el total y se guarda igual.');
       else setProblema(navigator.onLine ? 'No pude leer el ticket. Escribe el total.' : 'Sin internet. Escribe el total y se guarda igual.');
       setTeclado(true);
     }

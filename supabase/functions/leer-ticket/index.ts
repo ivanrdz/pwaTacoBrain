@@ -2,19 +2,55 @@
 // Regresa también la categoría sugerida y los renglones del ticket (para el inventario).
 // La llave del modelo de visión vive aquí (secretos de Supabase), nunca en el celular.
 //
-// Secretos:
-//   PROVEEDOR_IA   = "anthropic" (por defecto) | "openai"
+// Secretos (supabase secrets set ...; nunca en el código ni en el repo):
+//   PROVEEDOR_IA          = "anthropic" (por defecto) | "openai"
 //   ANTHROPIC_API_KEY / OPENAI_API_KEY
-//   MODELO_IA      = opcional; por defecto claude-haiku-5-5 u gpt-4o-mini
+//   MODELO_IA             = opcional; por defecto claude-haiku-5-5 u gpt-4o-mini
+//   ORIGENES_PERMITIDOS   = dominios de la app separados por coma, ej. https://tacobrain.vercel.app
+//   LIMITE_LECTURAS_DIA   = lecturas por cuenta al día (por defecto 50)
+// SUPABASE_URL y SUPABASE_ANON_KEY los pone Supabase solo.
 //
-// Supabase verifica el JWT del usuario antes de llegar aquí (verify_jwt = true por defecto),
-// así que solo cuentas con sesión pueden gastar llamadas al modelo.
+// Seguridad:
+// - Supabase verifica el JWT del usuario antes de llegar aquí (verify_jwt = true), así que
+//   solo cuentas con sesión pueden llamar.
+// - Solo se aceptan llamadas desde los dominios de ORIGENES_PERMITIDOS (más localhost para desarrollo).
+// - Cada cuenta tiene un límite diario, contado en la base ANTES de pagar al modelo.
+// - Los errores del modelo se registran aquí pero al celular solo llega un mensaje genérico.
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS'
-};
+const ORIGENES_DESARROLLO = ['http://localhost:5173', 'http://localhost:4173'];
+
+function origenesPermitidos(): string[] {
+  const env = (Deno.env.get('ORIGENES_PERMITIDOS') ?? '')
+    .split(',')
+    .map((o) => o.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+  return [...env, ...ORIGENES_DESARROLLO];
+}
+
+function encabezadosCors(origen: string | null): Record<string, string> {
+  const base: Record<string, string> = {
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    Vary: 'Origin'
+  };
+  if (origen && origenesPermitidos().includes(origen)) base['Access-Control-Allow-Origin'] = origen;
+  return base;
+}
+
+/** Suma una lectura a la cuenta (con su propio token) y dice si sigue dentro del límite. */
+async function dentroDelLimite(autorizacion: string): Promise<boolean> {
+  const url = Deno.env.get('SUPABASE_URL');
+  const anon = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!url || !anon) throw new Error('Faltan SUPABASE_URL o SUPABASE_ANON_KEY');
+  const limite = Number(Deno.env.get('LIMITE_LECTURAS_DIA') ?? '50');
+  const r = await fetch(`${url}/rest/v1/rpc/consumir_lectura_ia`, {
+    method: 'POST',
+    headers: { apikey: anon, authorization: autorizacion, 'content-type': 'application/json' },
+    body: JSON.stringify({ p_limite: Number.isFinite(limite) ? limite : 50 })
+  });
+  if (!r.ok) throw new Error(`Límite ${r.status}: ${await r.text()}`);
+  return (await r.json()) === true;
+}
 
 const INSTRUCCIONES = `Eres un lector de tickets de compra de una taquería en México (carnicerías, tortillerías, abarrotes, mercados, gas, renta, luz).
 Lee la foto y responde SOLO con un objeto JSON, sin texto extra, con esta forma:
@@ -47,8 +83,8 @@ interface Lectura {
   items: Renglon[];
 }
 
-function responder(cuerpo: unknown, status = 200) {
-  return new Response(JSON.stringify(cuerpo), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+function responder(cuerpo: unknown, status: number, cors: Record<string, string>) {
+  return new Response(JSON.stringify(cuerpo), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 }
 
 const numero = (v: unknown) => (typeof v === 'number' ? v : Number(String(v ?? '').replace(/[^0-9.]/g, '')));
@@ -134,20 +170,29 @@ async function conOpenAI(imagen: string, tipo: string): Promise<Lectura> {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
-  if (req.method !== 'POST') return responder({ error: 'Solo POST' }, 405);
+  const origen = req.headers.get('origin');
+  const cors = encabezadosCors(origen);
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
+  // Un navegador desde otro sitio no puede usar la función (las apps nativas no mandan Origin).
+  if (origen && !cors['Access-Control-Allow-Origin']) return responder({ error: 'Origen no permitido' }, 403, cors);
+  if (req.method !== 'POST') return responder({ error: 'Solo POST' }, 405, cors);
+  if (Number(req.headers.get('content-length') ?? '0') > 8_500_000) return responder({ error: 'La imagen es muy grande' }, 413, cors);
+  const autorizacion = req.headers.get('authorization');
+  if (!autorizacion?.startsWith('Bearer ')) return responder({ error: 'Sin sesión' }, 401, cors);
 
   try {
     const { imagen, tipo = 'image/jpeg' } = await req.json();
-    if (typeof imagen !== 'string' || imagen.length < 100) return responder({ error: 'Falta la imagen' }, 400);
-    if (imagen.length > 8_000_000) return responder({ error: 'La imagen es muy grande' }, 413);
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(tipo)) return responder({ error: 'Tipo de imagen no soportado' }, 400);
+    if (typeof imagen !== 'string' || imagen.length < 100) return responder({ error: 'Falta la imagen' }, 400, cors);
+    if (imagen.length > 8_000_000) return responder({ error: 'La imagen es muy grande' }, 413, cors);
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(tipo)) return responder({ error: 'Tipo de imagen no soportado' }, 400, cors);
+
+    if (!(await dentroDelLimite(autorizacion))) return responder({ error: 'limite-diario' }, 429, cors);
 
     const proveedor = (Deno.env.get('PROVEEDOR_IA') ?? 'anthropic').toLowerCase();
     const lectura = proveedor === 'openai' ? await conOpenAI(imagen, tipo) : await conAnthropic(imagen, tipo);
-    return responder(lectura);
+    return responder(lectura, 200, cors);
   } catch (e) {
     console.error(e);
-    return responder({ error: 'No se pudo leer el ticket' }, 502);
+    return responder({ error: 'No se pudo leer el ticket' }, 502, cors);
   }
 });

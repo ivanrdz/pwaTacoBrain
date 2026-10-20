@@ -23,8 +23,11 @@ type Tabla = 'ventas' | 'gastos' | 'insumos' | 'movs_inventario' | 'movs_dinero'
 type Fila = Record<string, unknown> & { id: string };
 type Pendiente = { op: 'upsert'; tabla: Tabla; fila: Fila } | { op: 'delete'; tabla: Tabla; id: string };
 
-const COLA = 'tb:cola';
-const FALLIDOS = 'tb:cola-fallidos';
+// La cola es POR USUARIO: si en el mismo celular entra otra cuenta, nunca sube
+// los pendientes de la anterior. Al cerrar sesión se borra.
+let usuarioActual: string | null = null;
+const claveCola = (uid: string) => `tb:cola:${uid}`;
+const claveFallidos = (uid: string) => `tb:cola-fallidos:${uid}`;
 
 function leerLista<T>(clave: string): T[] {
   try {
@@ -36,25 +39,34 @@ function leerLista<T>(clave: string): T[] {
 
 function guardarLista(clave: string, lista: unknown[]): void {
   try {
-    localStorage.setItem(clave, JSON.stringify(lista));
+    if (lista.length) localStorage.setItem(clave, JSON.stringify(lista));
+    else localStorage.removeItem(clave);
   } catch {
     /* sin espacio */
   }
 }
 
-/** Formatos legados de la cola (antes de la cola genérica) */
-function migrarPendiente(p: Pendiente | { tipo: string; venta?: Venta; gasto?: Gasto; id?: string }): Pendiente | null {
-  if ('op' in p) return p;
-  if (p.tipo === 'venta' && p.venta) return { op: 'upsert', tabla: 'ventas', fila: filaVenta(normalizarVenta(p.venta)) };
-  if (p.tipo === 'gasto' && p.gasto) return { op: 'upsert', tabla: 'gastos', fila: filaGasto(normalizarGasto(p.gasto), null) };
-  if (p.tipo === 'borrar-venta' && p.id) return { op: 'delete', tabla: 'ventas', id: p.id };
-  return null;
+function leerCola(): Pendiente[] {
+  return usuarioActual ? leerLista<Pendiente>(claveCola(usuarioActual)) : [];
 }
 
-function leerCola(): Pendiente[] {
-  return leerLista<Pendiente>(COLA)
-    .map(migrarPendiente)
-    .filter((p): p is Pendiente => p !== null);
+function guardarCola(cola: Pendiente[]): void {
+  if (!usuarioActual) throw new Error('sin-sesion');
+  guardarLista(claveCola(usuarioActual), cola);
+}
+
+/** Borra todo lo que la app guardó en el celular (cola, demo y versiones viejas). */
+function borrarDatosLocales(): void {
+  try {
+    const claves: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith('tb:')) claves.push(k);
+    }
+    claves.forEach((k) => localStorage.removeItem(k));
+  } catch {
+    /* nada */
+  }
 }
 
 // ---------- Conversión dominio <-> filas ----------
@@ -134,7 +146,7 @@ function esErrorDeRed(e: unknown): boolean {
   return /fetch|network|Failed|timeout|Load failed/i.test(msg);
 }
 
-export function crearAlmacenNube(sb: SupabaseClient): Almacen & { pendientes(): number } {
+export function crearAlmacenNube(sb: SupabaseClient): Almacen {
   let subiendo = false;
 
   async function ejecutar(p: Pendiente): Promise<void> {
@@ -158,10 +170,10 @@ export function crearAlmacenNube(sb: SupabaseClient): Almacen & { pendientes(): 
         } catch (e) {
           if (esErrorDeRed(e)) return; // se reintenta cuando regrese la señal
           // Un error de datos no debe atorar la cola: se aparta para revisarlo.
-          guardarLista(FALLIDOS, [...leerLista(FALLIDOS), { pendiente: cola[0], error: String((e as { message?: string })?.message ?? e) }]);
+          if (usuarioActual) guardarLista(claveFallidos(usuarioActual), [...leerLista(claveFallidos(usuarioActual)), { pendiente: cola[0], error: String((e as { message?: string })?.message ?? e) }]);
         }
         cola = leerCola().slice(1);
-        guardarLista(COLA, cola);
+        guardarCola(cola);
       }
     } finally {
       subiendo = false;
@@ -180,7 +192,7 @@ export function crearAlmacenNube(sb: SupabaseClient): Almacen & { pendientes(): 
         if (!esErrorDeRed(e)) throw e;
       }
     }
-    guardarLista(COLA, [...leerCola(), p]);
+    guardarCola([...leerCola(), p]);
   }
 
   /** Si todavía no se subía, se quita de la cola; si ya está en el servidor, se borra allá. */
@@ -188,7 +200,7 @@ export function crearAlmacenNube(sb: SupabaseClient): Almacen & { pendientes(): 
     const cola = leerCola();
     const sinSubir = cola.filter((p) => !(p.op === 'upsert' && p.tabla === tabla && p.fila.id === id));
     if (sinSubir.length !== cola.length) {
-      guardarLista(COLA, sinSubir);
+      guardarCola(sinSubir);
       return;
     }
     await enviar({ op: 'delete', tabla, id });
@@ -221,8 +233,9 @@ export function crearAlmacenNube(sb: SupabaseClient): Almacen & { pendientes(): 
   }
 
   window.addEventListener('online', () => void vaciarCola());
-  sb.auth.onAuthStateChange((evento) => {
-    if (evento === 'SIGNED_IN' || evento === 'INITIAL_SESSION') void vaciarCola();
+  sb.auth.onAuthStateChange((_evento, sesion) => {
+    usuarioActual = sesion?.user.id ?? null;
+    if (usuarioActual) void vaciarCola();
   });
 
   async function miId(): Promise<string | null> {
@@ -234,6 +247,11 @@ export function crearAlmacenNube(sb: SupabaseClient): Almacen & { pendientes(): 
     modo: 'nube',
 
     pendientes: () => leerCola().length,
+    async cerrarSesion() {
+      await sb.auth.signOut();
+      usuarioActual = null;
+      borrarDatosLocales();
+    },
 
     async nombreNegocio() {
       const { data } = await sb.from('negocios').select('nombre').maybeSingle();
@@ -313,7 +331,11 @@ export function crearAlmacenNube(sb: SupabaseClient): Almacen & { pendientes(): 
       const { data, error } = await sb.functions.invoke<LecturaTicket>('leer-ticket', {
         body: { imagen: await aBase64(comprimida), tipo: 'image/jpeg' }
       });
-      if (error || !data) throw error ?? new Error('sin-respuesta');
+      if (error) {
+        const estado = (error as { context?: { status?: number } }).context?.status;
+        throw new Error(estado === 429 ? 'limite-ia' : 'sin-lectura');
+      }
+      if (!data) throw new Error('sin-respuesta');
       return data;
     },
 

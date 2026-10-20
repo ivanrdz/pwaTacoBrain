@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { almacen, supabase } from '../data/almacen';
+import { almacen } from '../data/almacen';
 import { borrarDatosDemo, crearAlmacenLocal } from '../data/almacenLocal';
 import { COLORES_PRODUCTO, PRODUCTOS_EJEMPLO, type Producto } from '../data/tipos';
 import { dinero } from '../lib/dinero';
@@ -149,7 +149,15 @@ export function Productos({ regresar, irDinero }: { regresar: () => void; irDine
             </button>
           </>
         ) : (
-          <button type="button" className="btn btn-claro" onClick={() => supabase?.auth.signOut()}>
+          <button
+            type="button"
+            className="btn btn-claro"
+            onClick={async () => {
+              const n = a.pendientes();
+              if (n > 0 && !confirm(`Hay ${n} ${n === 1 ? 'movimiento' : 'movimientos'} sin subir porque no hubo internet. Si sales ahora se pierden. ¿Salir de todos modos?`)) return;
+              await a.cerrarSesion();
+            }}
+          >
             Cerrar sesión
           </button>
         )}

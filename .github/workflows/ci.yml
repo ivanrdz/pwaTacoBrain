@@ -1,0 +1,40 @@
+# Revisa cada push y pull request: llaves filtradas, tipos, pruebas, build y dependencias.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  revisar:
+    name: Tipos, pruebas y build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Buscar llaves en el código
+        run: npm run secretos
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Vulnerabilidades en dependencias
+        run: npm audit --omit=dev --audit-level=high
+
+  gitleaks:
+    name: Llaves en todo el historial
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
