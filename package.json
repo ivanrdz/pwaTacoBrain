@@ -22,7 +22,7 @@
     "react-dom": "^19.1.9"
   },
   "devDependencies": {
-    "@secretlint/secretlint-rule-pattern": "^10.2.2",
+    "@secretlint/secretlint-rule-pattern": "^13.0.7",
     "@secretlint/secretlint-rule-preset-recommend": "^10.2.2",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
