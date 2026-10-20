@@ -12,11 +12,22 @@ Pensada para gente con poca escolaridad y en un lugar con mucho ruido:
 
 | Pantalla | Qué hace |
 | --- | --- |
-| Inicio | Lo vendido y gastado hoy, y tres botones: Vender, Foto al ticket, ¿Cómo me fue? |
-| Vender | Un botón por producto. Cada toque suma uno; el botón − quita uno. "Cobrar" guarda la venta y deja 6 segundos para "Deshacer". |
-| Foto al ticket | Abre la cámara, lee proveedor, fecha y total con IA, y pide confirmar. El total se corrige con un teclado numérico grande. |
+| Inicio | Lo vendido y gastado hoy, y botones grandes: Vender, Foto al ticket, Inventario, ¿Cómo me fue? |
+| Vender | Un botón por producto. Cada toque suma uno; el botón − quita uno. "Cobrar" pregunta cómo pagaron (efectivo, transferencia, tarjeta) o si el pedido llegó por Rappi, Uber Eats o DiDi Food, y deja 6 segundos para "Deshacer". |
+| Foto al ticket | Abre la cámara, lee proveedor, fecha, total, tipo de gasto y renglones con IA, y pide confirmar. Se elige qué se pagó (insumos, renta, gas, luz y agua, sueldos, otro) y con qué (efectivo o banco). Los renglones de insumos entran al inventario. |
+| Inventario | Lo que hay guardado y cuánto vale. "Sacar" da de baja lo que se usó en el día; eso es el costo de lo vendido. |
 | ¿Cómo me fue? | Toca el micrófono y pregunta: "¿cómo me fue esta semana?", "¿cuánto gasté ayer?", "¿qué fue lo que más vendí este mes?". |
+| Mis números | Estado de resultados y balance general, explicados sencillo, y "PDF para el contador" con formato contable. |
+| Caja y cuentas | Comisiones de banco y apps, con cuánto dinero se empezó, equipo, deudas (con abonos) y retiros del dueño. |
 | Mis productos | Nombre de la taquería, productos con precio y color del botón. |
+
+## Cómo se calculan los números
+
+- **Ventas:** lo que pagó el cliente. Cada venta guarda la comisión del banco o de la app según el porcentaje configurado en *Caja y cuentas* (por defecto: tarjeta 3.5 %, transferencia 0 %, Rappi 25 %, Uber Eats 30 %, DiDi 25 %; ajústalos al contrato de cada taquería).
+- **Estado de resultados:** Ventas − comisiones = ventas netas; − costo de ventas = utilidad bruta; − renta, gas, luz y agua, sueldos y otros = utilidad neta.
+- **Costo de ventas:** lo que se *saca* del inventario, valuado a costo promedio. Las compras de insumos sin renglones cuentan directo como costo.
+- **Balance general:** caja y banco (lo inicial + ventas netas − gastos − retiros − abonos), inventario, equipo; deudas (saldo inicial − abonos); capital = lo aportado + utilidades acumuladas − retiros. Siempre cuadra.
+- Sin depreciación de equipo y con IVA incluido. Es informativo; no sustituye a la contabilidad formal.
 
 ## Arrancar en tu compu (modo demo)
 
@@ -45,7 +56,7 @@ npm run typecheck
 ## Modo nube (Supabase)
 
 1. Crea un proyecto en [supabase.com](https://supabase.com).
-2. Crea las tablas: copia `supabase/migrations/20261010000000_inicio.sql` en el **SQL Editor** y ejecútalo. (O con la CLI: `supabase link --project-ref <ref>` y `supabase db push`.)
+2. Crea las tablas: en el **SQL Editor** ejecuta, en orden, `supabase/migrations/20261010000000_inicio.sql` y `supabase/migrations/20261020000000_finanzas_inventario.sql`. (O con la CLI: `supabase link --project-ref <ref>` y `supabase db push`.)
 3. Publica la función que lee los tickets y guarda la llave del modelo de visión:
 
    ```bash
@@ -79,20 +90,22 @@ En el celular, abre la página y elige **"Agregar a pantalla de inicio"** para i
 ```
 src/
   App.tsx                 navegación entre pantallas y sesión
-  pantallas/              Inicio, Vender, FotoTicket, Reporte, Productos, Entrar
-  componentes/            Icono, Encabezado, TecladoNumerico
+  pantallas/              Inicio, Vender, FotoTicket, Inventario, Reporte, Numeros, Dinero, Productos, Entrar
+  componentes/            Icono, Encabezado, TecladoNumerico, EditorRenglon
   data/
     tipos.ts              tipos y la interfaz Almacen
     almacen.ts            elige demo o nube según el .env
     almacenLocal.ts       modo demo (localStorage)
     almacenNube.ts        Supabase + cola para cuando no hay internet
+    operaciones.ts        guardar compras al inventario y calcular los números
   lib/
-    reportes.ts           cuentas de la semana y la frase que se dice en voz
+    finanzas.ts           inventario, estado de resultados y balance general
+    reportes.ts           la frase que se dice en voz
     fechas.ts             hoy, ayer, semana (de lunes a domingo), mes
     voz.ts                reconocimiento y síntesis de voz del navegador
     imagen.ts             comprime la foto antes de subirla
 supabase/
-  migrations/             tablas, RLS y bucket de fotos
+  migrations/             tablas, RLS, bucket de fotos, inventario y finanzas
   functions/leer-ticket/  lee el ticket con un modelo de visión
 ```
 
@@ -101,4 +114,7 @@ supabase/
 - **Voz:** usa el reconocimiento de voz del navegador. Funciona en Chrome para Android y en Safari para iPhone, y necesita internet. Si no está disponible, quedan los botones rápidos.
 - **Sin internet:** ventas y gastos se encolan y se suben solos. Leer un ticket con IA sí necesita internet; sin señal, la app pide escribir el total a mano. Los productos se cargan de la nube, así que la primera vez del día conviene abrir la app con señal.
 - **Semana:** va de lunes a domingo.
-- **Fuera del MVP:** inventario, varios empleados, cortes de caja, facturación, Uber Eats y Rappi.
+- **Apps de delivery:** las ventas de Rappi, Uber Eats y DiDi se registran a mano al cobrar (no hay conexión con sus sistemas todavía).
+- **PDF:** "PDF para el contador" usa la opción de imprimir del celular → "Guardar como PDF". En iPhone, si la app está instalada en la pantalla de inicio y no abre la impresión, ábrela desde Safari.
+- **Números:** cada consulta trae todas las ventas desde el inicio para armar el balance. Con muchos meses de datos convendrá guardar cierres mensuales.
+- **Fuera del MVP:** varios empleados, cortes de caja, facturación y conexión directa con las apps de delivery.

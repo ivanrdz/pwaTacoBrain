@@ -7,8 +7,11 @@ import { FotoTicket } from './pantallas/FotoTicket';
 import { Reporte } from './pantallas/Reporte';
 import { Productos } from './pantallas/Productos';
 import { Entrar } from './pantallas/Entrar';
+import { Inventario } from './pantallas/Inventario';
+import { Numeros } from './pantallas/Numeros';
+import { Dinero } from './pantallas/Dinero';
 
-export type Pantalla = 'inicio' | 'vender' | 'foto' | 'reporte' | 'productos';
+export type Pantalla = 'inicio' | 'vender' | 'foto' | 'reporte' | 'productos' | 'inventario' | 'numeros' | 'dinero';
 
 export function App() {
   const [pantalla, setPantalla] = useState<Pantalla>('inicio');
@@ -21,9 +24,9 @@ export function App() {
     return () => data.subscription.unsubscribe();
   }, []);
 
-  // El botón "atrás" de Android regresa al inicio en lugar de cerrar la app.
+  // El botón "atrás" de Android regresa a la pantalla anterior en lugar de cerrar la app.
   useEffect(() => {
-    const alRegresar = () => setPantalla('inicio');
+    const alRegresar = (e: PopStateEvent) => setPantalla((e.state?.p as Pantalla | undefined) ?? 'inicio');
     window.addEventListener('popstate', alRegresar);
     return () => window.removeEventListener('popstate', alRegresar);
   }, []);
@@ -48,9 +51,15 @@ export function App() {
     case 'foto':
       return <FotoTicket regresar={regresar} />;
     case 'reporte':
-      return <Reporte regresar={regresar} />;
+      return <Reporte regresar={regresar} irNumeros={() => ir('numeros')} />;
     case 'productos':
-      return <Productos regresar={regresar} />;
+      return <Productos regresar={regresar} irDinero={() => ir('dinero')} />;
+    case 'inventario':
+      return <Inventario regresar={regresar} irFoto={() => ir('foto')} />;
+    case 'numeros':
+      return <Numeros regresar={regresar} irDinero={() => ir('dinero')} />;
+    case 'dinero':
+      return <Dinero regresar={regresar} />;
     default:
       return <Inicio ir={ir} />;
   }

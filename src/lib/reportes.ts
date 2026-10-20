@@ -1,35 +1,23 @@
-import type { Gasto, Venta } from '../data/tipos';
+import type { Venta } from '../data/tipos';
 import { dineroVoz } from './dinero';
 import type { Periodo, Rango } from './fechas';
+import type { EstadoResultados } from './finanzas';
 
 export interface Resumen {
-  ventas: number;
-  numVentas: number;
-  gastos: number;
-  numGastos: number;
-  ganancia: number;
+  er: EstadoResultados;
   masVendido: { nombre: string; cantidad: number } | null;
 }
 
-export function resumir(ventas: Venta[], gastos: Gasto[]): Resumen {
-  const totalVentas = ventas.reduce((s, v) => s + v.total, 0);
-  const totalGastos = gastos.reduce((s, g) => s + g.total, 0);
+export function masVendido(ventas: Venta[]): Resumen['masVendido'] {
   const piezas = new Map<string, number>();
   for (const v of ventas) {
     for (const it of v.items) piezas.set(it.nombre, (piezas.get(it.nombre) ?? 0) + it.cantidad);
   }
-  let masVendido: Resumen['masVendido'] = null;
+  let mejor: Resumen['masVendido'] = null;
   for (const [nombre, cantidad] of piezas) {
-    if (!masVendido || cantidad > masVendido.cantidad) masVendido = { nombre, cantidad };
+    if (!mejor || cantidad > mejor.cantidad) mejor = { nombre, cantidad };
   }
-  return {
-    ventas: totalVentas,
-    numVentas: ventas.length,
-    gastos: totalGastos,
-    numGastos: gastos.length,
-    ganancia: totalVentas - totalGastos,
-    masVendido
-  };
+  return mejor;
 }
 
 export type Enfoque = 'todo' | 'ventas' | 'gastos' | 'ganancia' | 'producto';
@@ -67,16 +55,17 @@ function frase(s: string): string {
 
 /** Arma la respuesta. Con dineroVoz para leerla en voz alta; con dinero para mostrarla. */
 export function respuestaHablada(r: Resumen, rango: Rango, enfoque: Enfoque, fmt: (n: number) => string = dineroVoz): string {
+  const { er } = r;
   const cuando = rango.nombre;
-  if (r.numVentas === 0 && r.numGastos === 0) {
+  const hayGastos = er.comprasInsumos > 0 || er.totalGastosOperacion > 0 || er.costoVentas > 0;
+  if (er.numVentas === 0 && !hayGastos) {
     return `${frase(cuando)} todavía no tienes ventas ni gastos registrados.`;
   }
-  const ventas = `${cuando} vendiste ${fmt(r.ventas)} en ${r.numVentas} ${r.numVentas === 1 ? 'venta' : 'ventas'}`;
-  const gastos = `gastaste ${fmt(r.gastos)}`;
+  const ventas = `${cuando} vendiste ${fmt(er.ventasBrutas)} en ${er.numVentas} ${er.numVentas === 1 ? 'venta' : 'ventas'}`;
   const ganancia =
-    r.ganancia >= 0
-      ? `te quedaron ${fmt(Math.abs(r.ganancia))} de ganancia`
-      : `perdiste ${fmt(Math.abs(r.ganancia))}, porque gastaste más de lo que vendiste`;
+    er.utilidadNeta >= 0
+      ? `te quedaron ${fmt(er.utilidadNeta)} de ganancia`
+      : `perdiste ${fmt(Math.abs(er.utilidadNeta))}, porque gastaste más de lo que vendiste`;
   const producto = r.masVendido
     ? `Lo que más vendiste fue ${r.masVendido.nombre.toLowerCase()}, ${r.masVendido.cantidad} ${r.masVendido.cantidad === 1 ? 'pieza' : 'piezas'}.`
     : '';
@@ -84,13 +73,26 @@ export function respuestaHablada(r: Resumen, rango: Rango, enfoque: Enfoque, fmt
   switch (enfoque) {
     case 'ventas':
       return `${frase(ventas)}.`;
-    case 'gastos':
-      return `${frase(cuando)} ${gastos}${r.numGastos ? ` en ${r.numGastos} ${r.numGastos === 1 ? 'compra' : 'compras'}` : ''}.`;
+    case 'gastos': {
+      const partes: string[] = [];
+      if (er.comprasInsumos > 0) partes.push(`compraste ${fmt(er.comprasInsumos)} de insumos`);
+      if (er.totalGastosOperacion > 0) partes.push(`pagaste ${fmt(er.totalGastosOperacion)} de otros gastos`);
+      if (er.comisiones > 0) partes.push(`se fueron ${fmt(er.comisiones)} en comisiones`);
+      if (!partes.length) return `${frase(cuando)} no registraste gastos.`;
+      const unidas = partes.length > 1 ? `${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}` : partes[0];
+      return `${frase(cuando)} ${unidas}.`;
+    }
     case 'ganancia':
       return `${frase(cuando)} ${ganancia}.`;
     case 'producto':
       return producto || `${frase(cuando)} todavía no hay ventas.`;
-    case 'todo':
-      return `${frase(ventas)}, ${gastos} y ${ganancia}. ${producto}`.trim();
+    case 'todo': {
+      const salidas: string[] = [];
+      if (er.comisiones > 0) salidas.push(`se fueron ${fmt(er.comisiones)} en comisiones`);
+      if (er.costoVentas > 0) salidas.push(`lo que usaste de insumos costó ${fmt(er.costoVentas)}`);
+      if (er.totalGastosOperacion > 0) salidas.push(`tus otros gastos fueron ${fmt(er.totalGastosOperacion)}`);
+      const medio = salidas.length ? ` ${frase(salidas.length > 1 ? `${salidas.slice(0, -1).join(', ')} y ${salidas[salidas.length - 1]}` : salidas[0])}.` : '';
+      return `${frase(ventas)}.${medio} ${frase(ganancia)}. ${producto}`.trim();
+    }
   }
 }

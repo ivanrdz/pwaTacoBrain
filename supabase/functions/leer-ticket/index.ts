@@ -1,4 +1,5 @@
-// Edge Function: recibe la foto de un ticket y regresa { proveedor, fecha, total }.
+// Edge Function: recibe la foto de un ticket y regresa { proveedor, fecha, total, categoria, items }.
+// Regresa también la categoría sugerida y los renglones del ticket (para el inventario).
 // La llave del modelo de visión vive aquí (secretos de Supabase), nunca en el celular.
 //
 // Secretos:
@@ -15,36 +16,69 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
 
-const INSTRUCCIONES = `Eres un lector de tickets de compra de México (carnicerías, tortillerías, abarrotes, mercados).
+const INSTRUCCIONES = `Eres un lector de tickets de compra de una taquería en México (carnicerías, tortillerías, abarrotes, mercados, gas, renta, luz).
 Lee la foto y responde SOLO con un objeto JSON, sin texto extra, con esta forma:
-{"proveedor": string | null, "fecha": "YYYY-MM-DD" | null, "total": number | null}
+{"proveedor": string | null, "fecha": "YYYY-MM-DD" | null, "total": number | null,
+ "categoria": "insumos" | "renta" | "gas" | "luz" | "sueldos" | "otro" | null,
+ "items": [{"nombre": string, "cantidad": number, "unidad": "kg" | "pza" | "paq" | "lt", "total": number}]}
 Reglas:
 - "total" es el TOTAL a pagar (no el subtotal, ni el IVA, ni el cambio, ni "efectivo"). Número sin signo de pesos ni comas.
 - Las fechas en México suelen venir como DD/MM/AAAA o DD-MM-AA. Conviértelas a YYYY-MM-DD.
 - "proveedor" es el nombre del negocio que vende (normalmente arriba del ticket), corto y legible.
+- "categoria": "insumos" para comida, bebidas, desechables y todo lo que se usa para preparar o vender; "gas" para gas; "luz" para luz o agua; "renta" para renta; "otro" para lo demás.
+- "items": solo si categoria es "insumos". Un renglón por producto con su cantidad, unidad e importe. Nombres cortos y genéricos ("Bistec de res", "Tortilla", "Cebolla"). Si no se ven los renglones, lista vacía.
 - Si no puedes leer un dato con seguridad, ponlo en null. No inventes.`;
+
+const CATEGORIAS = ['insumos', 'renta', 'gas', 'luz', 'sueldos', 'otro'];
+const UNIDADES = ['kg', 'pza', 'paq', 'lt'];
+
+interface Renglon {
+  nombre: string;
+  cantidad: number;
+  unidad: string;
+  total: number;
+}
 
 interface Lectura {
   proveedor: string | null;
   fecha: string | null;
   total: number | null;
+  categoria: string | null;
+  items: Renglon[];
 }
 
 function responder(cuerpo: unknown, status = 200) {
   return new Response(JSON.stringify(cuerpo), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
+const numero = (v: unknown) => (typeof v === 'number' ? v : Number(String(v ?? '').replace(/[^0-9.]/g, '')));
+
 function extraerJSON(texto: string): Lectura {
   const inicio = texto.indexOf('{');
   const fin = texto.lastIndexOf('}');
   if (inicio < 0 || fin < inicio) throw new Error('El modelo no regresó JSON');
   const crudo = JSON.parse(texto.slice(inicio, fin + 1));
-  const total = typeof crudo.total === 'number' ? crudo.total : Number(String(crudo.total ?? '').replace(/[^0-9.]/g, ''));
+  const total = numero(crudo.total);
   const fecha = typeof crudo.fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(crudo.fecha) ? crudo.fecha : null;
+  const categoria = CATEGORIAS.includes(crudo.categoria) ? crudo.categoria : null;
+  const items: Renglon[] = Array.isArray(crudo.items)
+    ? crudo.items
+        .map((it: Record<string, unknown>) => ({
+          nombre: typeof it?.nombre === 'string' ? it.nombre.trim().slice(0, 60) : '',
+          cantidad: numero(it?.cantidad),
+          unidad: UNIDADES.includes(String(it?.unidad)) ? String(it.unidad) : 'pza',
+          total: numero(it?.total)
+        }))
+        .filter((it: Renglon) => it.nombre && Number.isFinite(it.cantidad) && it.cantidad > 0)
+        .map((it: Renglon) => ({ ...it, total: Number.isFinite(it.total) && it.total > 0 ? Math.round(it.total * 100) / 100 : 0 }))
+        .slice(0, 30)
+    : [];
   return {
     proveedor: typeof crudo.proveedor === 'string' && crudo.proveedor.trim() ? crudo.proveedor.trim().slice(0, 80) : null,
     fecha,
-    total: Number.isFinite(total) && total > 0 ? Math.round(total * 100) / 100 : null
+    total: Number.isFinite(total) && total > 0 ? Math.round(total * 100) / 100 : null,
+    categoria,
+    items: categoria === 'insumos' || categoria === null ? items : []
   };
 }
 
@@ -56,7 +90,7 @@ async function conAnthropic(imagen: string, tipo: string): Promise<Lectura> {
     headers: { 'x-api-key': llave, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
       model: Deno.env.get('MODELO_IA') ?? 'claude-haiku-5-5',
-      max_tokens: 300,
+      max_tokens: 1500,
       messages: [
         {
           role: 'user',

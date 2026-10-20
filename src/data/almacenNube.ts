@@ -1,66 +1,150 @@
 // MODO NUBE: datos en Supabase, separados por taquería (cada cuenta ve solo lo suyo, por RLS).
-// Si se cae el internet, las ventas y gastos se guardan en una cola en el celular
-// y se suben solos cuando regresa la señal.
+// Si se cae el internet, ventas, gastos, inventario y movimientos de dinero se guardan
+// en una cola en el celular y se suben solos cuando regresa la señal.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { aBase64, comprimirFoto } from '../lib/imagen';
 import { fechaISO } from '../lib/fechas';
-import type { Almacen, Gasto, LecturaTicket, Producto, Venta } from './tipos';
+import {
+  CONFIG_INICIAL,
+  normalizarGasto,
+  normalizarVenta,
+  type Almacen,
+  type ConfigFinanzas,
+  type Gasto,
+  type Insumo,
+  type LecturaTicket,
+  type MovDinero,
+  type MovInventario,
+  type Producto,
+  type Venta
+} from './tipos';
 
-type Pendiente =
-  | { tipo: 'venta'; venta: Venta }
-  | { tipo: 'borrar-venta'; id: string }
-  | { tipo: 'gasto'; gasto: Gasto };
+type Tabla = 'ventas' | 'gastos' | 'insumos' | 'movs_inventario' | 'movs_dinero';
+type Fila = Record<string, unknown> & { id: string };
+type Pendiente = { op: 'upsert'; tabla: Tabla; fila: Fila } | { op: 'delete'; tabla: Tabla; id: string };
 
 const COLA = 'tb:cola';
+const FALLIDOS = 'tb:cola-fallidos';
 
-function leerCola(): Pendiente[] {
+function leerLista<T>(clave: string): T[] {
   try {
-    return JSON.parse(localStorage.getItem(COLA) ?? '[]') as Pendiente[];
+    return JSON.parse(localStorage.getItem(clave) ?? '[]') as T[];
   } catch {
     return [];
   }
 }
 
-function guardarCola(cola: Pendiente[]): void {
+function guardarLista(clave: string, lista: unknown[]): void {
   try {
-    localStorage.setItem(COLA, JSON.stringify(cola));
+    localStorage.setItem(clave, JSON.stringify(lista));
   } catch {
     /* sin espacio */
   }
 }
 
-interface FilaVenta {
-  id: string;
-  total: number | string;
-  items: Venta['items'];
-  creada_en: string;
-}
-interface FilaGasto {
-  id: string;
-  proveedor: string | null;
-  fecha: string;
-  total: number | string;
-  creado_en: string;
+/** Formatos legados de la cola (antes de la cola genérica) */
+function migrarPendiente(p: Pendiente | { tipo: string; venta?: Venta; gasto?: Gasto; id?: string }): Pendiente | null {
+  if ('op' in p) return p;
+  if (p.tipo === 'venta' && p.venta) return { op: 'upsert', tabla: 'ventas', fila: filaVenta(normalizarVenta(p.venta)) };
+  if (p.tipo === 'gasto' && p.gasto) return { op: 'upsert', tabla: 'gastos', fila: filaGasto(normalizarGasto(p.gasto), null) };
+  if (p.tipo === 'borrar-venta' && p.id) return { op: 'delete', tabla: 'ventas', id: p.id };
+  return null;
 }
 
-const aVenta = (f: FilaVenta): Venta => ({ id: f.id, total: Number(f.total), items: f.items, creadaEn: f.creada_en });
-const aGasto = (f: FilaGasto): Gasto => ({ id: f.id, proveedor: f.proveedor ?? '', fecha: f.fecha, total: Number(f.total), creadoEn: f.creado_en });
+function leerCola(): Pendiente[] {
+  return leerLista<Pendiente>(COLA)
+    .map(migrarPendiente)
+    .filter((p): p is Pendiente => p !== null);
+}
+
+// ---------- Conversión dominio <-> filas ----------
+
+const filaVenta = (v: Venta): Fila => ({ id: v.id, total: v.total, items: v.items, creada_en: v.creadaEn, metodo: v.metodo, canal: v.canal, comision: v.comision });
+const aVenta = (f: Fila): Venta =>
+  normalizarVenta({
+    id: f.id,
+    total: Number(f.total),
+    items: f.items as Venta['items'],
+    creadaEn: String(f.creada_en),
+    metodo: f.metodo as Venta['metodo'],
+    canal: f.canal as Venta['canal'],
+    comision: Number(f.comision ?? 0)
+  });
+
+const filaGasto = (g: Gasto, fotoPath: string | null): Fila => ({
+  id: g.id,
+  proveedor: g.proveedor,
+  fecha: g.fecha,
+  total: g.total,
+  creado_en: g.creadoEn,
+  categoria: g.categoria,
+  cuenta: g.cuenta,
+  items: g.items,
+  foto_path: fotoPath
+});
+const aGasto = (f: Fila): Gasto =>
+  normalizarGasto({
+    id: f.id,
+    proveedor: String(f.proveedor ?? ''),
+    fecha: String(f.fecha),
+    total: Number(f.total),
+    creadoEn: String(f.creado_en),
+    categoria: f.categoria as Gasto['categoria'],
+    cuenta: f.cuenta as Gasto['cuenta'],
+    items: (f.items as Gasto['items']) ?? []
+  });
+
+const filaMovInv = (m: MovInventario): Fila => ({
+  id: m.id,
+  insumo_id: m.insumoId,
+  tipo: m.tipo,
+  cantidad: m.cantidad,
+  costo: m.costo,
+  fecha: m.fecha,
+  creado_en: m.creadoEn,
+  gasto_id: m.gastoId ?? null
+});
+const aMovInv = (f: Fila): MovInventario => ({
+  id: f.id,
+  insumoId: String(f.insumo_id),
+  tipo: f.tipo as MovInventario['tipo'],
+  cantidad: Number(f.cantidad),
+  costo: Number(f.costo),
+  fecha: String(f.fecha),
+  creadoEn: String(f.creado_en),
+  gastoId: (f.gasto_id as string | null) ?? null
+});
+
+const filaMovDin = (m: MovDinero): Fila => ({ id: m.id, tipo: m.tipo, monto: m.monto, cuenta: m.cuenta, deuda_id: m.deudaId ?? null, fecha: m.fecha, creado_en: m.creadoEn });
+const aMovDin = (f: Fila): MovDinero => ({
+  id: f.id,
+  tipo: f.tipo as MovDinero['tipo'],
+  monto: Number(f.monto),
+  cuenta: f.cuenta as MovDinero['cuenta'],
+  deudaId: (f.deuda_id as string | null) ?? null,
+  fecha: String(f.fecha),
+  creadoEn: String(f.creado_en)
+});
+
+const filaInsumo = (i: Insumo): Fila => ({ id: i.id, nombre: i.nombre, unidad: i.unidad });
+const aInsumo = (f: Fila): Insumo => ({ id: f.id, nombre: String(f.nombre), unidad: f.unidad as Insumo['unidad'] });
+
+function esErrorDeRed(e: unknown): boolean {
+  const msg = String((e as { message?: string })?.message ?? e);
+  return /fetch|network|Failed|timeout|Load failed/i.test(msg);
+}
 
 export function crearAlmacenNube(sb: SupabaseClient): Almacen & { pendientes(): number } {
   let subiendo = false;
 
-  async function subirVenta(v: Venta) {
-    const { error } = await sb
-      .from('ventas')
-      .upsert({ id: v.id, total: v.total, items: v.items, creada_en: v.creadaEn }, { onConflict: 'id', ignoreDuplicates: true });
-    if (error) throw error;
-  }
-
-  async function subirGasto(g: Gasto, fotoPath: string | null) {
-    const { error } = await sb
-      .from('gastos')
-      .upsert({ id: g.id, proveedor: g.proveedor, fecha: g.fecha, total: g.total, creado_en: g.creadoEn, foto_path: fotoPath }, { onConflict: 'id', ignoreDuplicates: true });
-    if (error) throw error;
+  async function ejecutar(p: Pendiente): Promise<void> {
+    if (p.op === 'upsert') {
+      const { error } = await sb.from(p.tabla).upsert(p.fila, { onConflict: 'id' });
+      if (error) throw error;
+    } else {
+      const { error } = await sb.from(p.tabla).delete().eq('id', p.id);
+      if (error) throw error;
+    }
   }
 
   async function vaciarCola() {
@@ -69,46 +153,69 @@ export function crearAlmacenNube(sb: SupabaseClient): Almacen & { pendientes(): 
     try {
       let cola = leerCola();
       while (cola.length) {
-        const p = cola[0];
-        if (p.tipo === 'venta') await subirVenta(p.venta);
-        else if (p.tipo === 'gasto') await subirGasto(p.gasto, null);
-        else {
-          const { error } = await sb.from('ventas').delete().eq('id', p.id);
-          if (error) throw error;
+        try {
+          await ejecutar(cola[0]);
+        } catch (e) {
+          if (esErrorDeRed(e)) return; // se reintenta cuando regrese la señal
+          // Un error de datos no debe atorar la cola: se aparta para revisarlo.
+          guardarLista(FALLIDOS, [...leerLista(FALLIDOS), { pendiente: cola[0], error: String((e as { message?: string })?.message ?? e) }]);
         }
         cola = leerCola().slice(1);
-        guardarCola(cola);
+        guardarLista(COLA, cola);
       }
-    } catch {
-      // se reintenta en el siguiente evento "online" o al abrir la app
     } finally {
       subiendo = false;
     }
   }
 
-  async function intentarOEncolar(accion: () => Promise<void>, pendiente: Pendiente) {
+  /** Intenta en línea; si no hay red, encola. Errores de datos o permisos se muestran. */
+  async function enviar(p: Pendiente, antes?: () => Promise<void>) {
     if (navigator.onLine) {
       try {
-        await accion();
+        await antes?.();
+        await ejecutar(p);
         void vaciarCola();
         return;
       } catch (e) {
-        const msg = String((e as { message?: string })?.message ?? e);
-        // Errores de permisos/datos no se encolan: se muestran.
-        if (!/fetch|network|Failed|timeout/i.test(msg)) throw e;
+        if (!esErrorDeRed(e)) throw e;
       }
     }
-    guardarCola([...leerCola(), pendiente]);
+    guardarLista(COLA, [...leerCola(), p]);
+  }
+
+  /** Si todavía no se subía, se quita de la cola; si ya está en el servidor, se borra allá. */
+  async function borrar(tabla: Tabla, id: string) {
+    const cola = leerCola();
+    const sinSubir = cola.filter((p) => !(p.op === 'upsert' && p.tabla === tabla && p.fila.id === id));
+    if (sinSubir.length !== cola.length) {
+      guardarLista(COLA, sinSubir);
+      return;
+    }
+    await enviar({ op: 'delete', tabla, id });
+  }
+
+  /** Mezcla lo del servidor con lo que sigue en la cola sin subir. */
+  function conCola<T extends { id: string }>(tabla: Tabla, delServidor: T[], convertir: (f: Fila) => T, incluir: (x: T) => boolean): T[] {
+    const porId = new Map(delServidor.map((x) => [x.id, x]));
+    for (const p of leerCola()) {
+      if (p.tabla !== tabla) continue;
+      if (p.op === 'delete') porId.delete(p.id);
+      else {
+        const x = convertir(p.fila);
+        if (incluir(x)) porId.set(x.id, x);
+      }
+    }
+    return [...porId.values()];
   }
 
   /** PostgREST regresa máximo 1000 filas por llamada: pedimos por páginas. */
-  async function todas<T>(pedir: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
+  async function todas(pedir: (desde: number, hasta: number) => PromiseLike<{ data: unknown[] | null; error: unknown }>): Promise<Fila[]> {
     const tam = 1000;
-    const salida: T[] = [];
+    const salida: Fila[] = [];
     for (let i = 0; ; i += tam) {
       const { data, error } = await pedir(i, i + tam - 1);
       if (error) throw error;
-      salida.push(...(data ?? []));
+      salida.push(...((data ?? []) as Fila[]));
       if (!data || data.length < tam) return salida;
     }
   }
@@ -117,6 +224,11 @@ export function crearAlmacenNube(sb: SupabaseClient): Almacen & { pendientes(): 
   sb.auth.onAuthStateChange((evento) => {
     if (evento === 'SIGNED_IN' || evento === 'INITIAL_SESSION') void vaciarCola();
   });
+
+  async function miId(): Promise<string | null> {
+    const { data } = await sb.auth.getSession();
+    return data.session?.user.id ?? null;
+  }
 
   return {
     modo: 'nube',
@@ -128,9 +240,21 @@ export function crearAlmacenNube(sb: SupabaseClient): Almacen & { pendientes(): 
       return data?.nombre ?? 'Mi taquería';
     },
     async guardarNombreNegocio(nombre) {
-      const { data: u } = await sb.auth.getUser();
-      if (!u.user) return;
-      const { error } = await sb.from('negocios').upsert({ owner_id: u.user.id, nombre }, { onConflict: 'owner_id' });
+      const id = await miId();
+      if (!id) return;
+      const { error } = await sb.from('negocios').upsert({ owner_id: id, nombre }, { onConflict: 'owner_id' });
+      if (error) throw error;
+    },
+    async config() {
+      const { data, error } = await sb.from('negocios').select('config').maybeSingle();
+      if (error) throw error;
+      const c = (data?.config ?? {}) as Partial<ConfigFinanzas>;
+      return { ...CONFIG_INICIAL, ...c, comisiones: { ...CONFIG_INICIAL.comisiones, ...c.comisiones } };
+    },
+    async guardarConfig(c) {
+      const id = await miId();
+      if (!id) return;
+      const { error } = await sb.from('negocios').upsert({ owner_id: id, config: c }, { onConflict: 'owner_id' });
       if (error) throw error;
     },
 
@@ -150,68 +274,40 @@ export function crearAlmacenNube(sb: SupabaseClient): Almacen & { pendientes(): 
     },
 
     async registrarVenta(v) {
-      await intentarOEncolar(() => subirVenta(v), { tipo: 'venta', venta: v });
+      await enviar({ op: 'upsert', tabla: 'ventas', fila: filaVenta(v) });
     },
     async borrarVenta(id) {
-      const cola = leerCola();
-      const sinSubir = cola.filter((p) => !(p.tipo === 'venta' && p.venta.id === id));
-      if (sinSubir.length !== cola.length) {
-        guardarCola(sinSubir);
-        return;
-      }
-      await intentarOEncolar(
-        async () => {
-          const { error } = await sb.from('ventas').delete().eq('id', id);
-          if (error) throw error;
-        },
-        { tipo: 'borrar-venta', id }
+      await borrar('ventas', id);
+    },
+    async ventasEntre(desde, hasta) {
+      const filas = await todas((a, b) =>
+        sb.from('ventas').select('id,total,items,creada_en,metodo,canal,comision').gte('creada_en', desde.toISOString()).lt('creada_en', hasta.toISOString()).order('creada_en').range(a, b)
       );
+      return conCola('ventas', filas.map(aVenta), aVenta, (v) => {
+        const t = new Date(v.creadaEn).getTime();
+        return t >= desde.getTime() && t < hasta.getTime();
+      });
     },
 
     async registrarGasto(g, foto) {
-      await intentarOEncolar(async () => {
-        let fotoPath: string | null = null;
-        if (foto) {
-          const { data: u } = await sb.auth.getUser();
-          if (u.user) {
-            const ruta = `${u.user.id}/${g.id}.jpg`;
-            const { error } = await sb.storage.from('tickets').upload(ruta, foto, { contentType: 'image/jpeg', upsert: true });
-            if (!error) fotoPath = ruta;
-          }
-        }
-        await subirGasto(g, fotoPath);
-      }, { tipo: 'gasto', gasto: g });
-    },
-
-    async ventasEntre(desde, hasta) {
-      const filas = await todas<FilaVenta>((a, b) =>
-        sb.from('ventas').select('id,total,items,creada_en').gte('creada_en', desde.toISOString()).lt('creada_en', hasta.toISOString()).order('creada_en').range(a, b)
-      );
-      const ventas = filas.map(aVenta);
-      const cola = leerCola();
-      const borradas = new Set(cola.flatMap((p) => (p.tipo === 'borrar-venta' ? [p.id] : [])));
-      const ids = new Set(ventas.map((v) => v.id));
-      for (const p of cola) {
-        if (p.tipo !== 'venta' || ids.has(p.venta.id)) continue;
-        const t = new Date(p.venta.creadaEn).getTime();
-        if (t >= desde.getTime() && t < hasta.getTime()) ventas.push(p.venta);
-      }
-      return ventas.filter((v) => !borradas.has(v.id));
+      const fila = filaGasto(g, null);
+      await enviar({ op: 'upsert', tabla: 'gastos', fila }, async () => {
+        if (!foto) return;
+        const id = await miId();
+        if (!id) return;
+        const ruta = `${id}/${g.id}.jpg`;
+        const { error } = await sb.storage.from('tickets').upload(ruta, foto, { contentType: 'image/jpeg', upsert: true });
+        if (!error) fila.foto_path = ruta;
+      });
     },
     async gastosEntre(desde, hasta) {
       const a = fechaISO(desde);
       const b = fechaISO(hasta);
-      const filas = await todas<FilaGasto>((i, j) =>
-        sb.from('gastos').select('id,proveedor,fecha,total,creado_en').gte('fecha', a).lt('fecha', b).order('fecha').range(i, j)
+      const filas = await todas((i, j) =>
+        sb.from('gastos').select('id,proveedor,fecha,total,creado_en,categoria,cuenta,items').gte('fecha', a).lt('fecha', b).order('fecha').range(i, j)
       );
-      const gastos = filas.map(aGasto);
-      const ids = new Set(gastos.map((g) => g.id));
-      for (const p of leerCola()) {
-        if (p.tipo === 'gasto' && !ids.has(p.gasto.id) && p.gasto.fecha >= a && p.gasto.fecha < b) gastos.push(p.gasto);
-      }
-      return gastos;
+      return conCola('gastos', filas.map(aGasto), aGasto, (g) => g.fecha >= a && g.fecha < b);
     },
-
     async leerTicket(foto): Promise<LecturaTicket> {
       const comprimida = await comprimirFoto(foto);
       const { data, error } = await sb.functions.invoke<LecturaTicket>('leer-ticket', {
@@ -219,6 +315,40 @@ export function crearAlmacenNube(sb: SupabaseClient): Almacen & { pendientes(): 
       });
       if (error || !data) throw error ?? new Error('sin-respuesta');
       return data;
+    },
+
+    async listarInsumos() {
+      const { data, error } = await sb.from('insumos').select('id,nombre,unidad').order('nombre');
+      if (error) throw error;
+      return conCola('insumos', ((data ?? []) as Fila[]).map(aInsumo), aInsumo, () => true);
+    },
+    async guardarInsumo(i) {
+      await enviar({ op: 'upsert', tabla: 'insumos', fila: filaInsumo(i) });
+    },
+    async movsInventario(hasta) {
+      const b = fechaISO(hasta);
+      const filas = await todas((i, j) =>
+        sb.from('movs_inventario').select('id,insumo_id,tipo,cantidad,costo,fecha,creado_en,gasto_id').lt('fecha', b).order('fecha').range(i, j)
+      );
+      return conCola('movs_inventario', filas.map(aMovInv), aMovInv, (m) => m.fecha < b);
+    },
+    async registrarMovInventario(m) {
+      await enviar({ op: 'upsert', tabla: 'movs_inventario', fila: filaMovInv(m) });
+    },
+    async borrarMovInventario(id) {
+      await borrar('movs_inventario', id);
+    },
+
+    async movsDinero(hasta) {
+      const b = fechaISO(hasta);
+      const filas = await todas((i, j) => sb.from('movs_dinero').select('id,tipo,monto,cuenta,deuda_id,fecha,creado_en').lt('fecha', b).order('fecha').range(i, j));
+      return conCola('movs_dinero', filas.map(aMovDin), aMovDin, (m) => m.fecha < b);
+    },
+    async registrarMovDinero(m) {
+      await enviar({ op: 'upsert', tabla: 'movs_dinero', fila: filaMovDin(m) });
+    },
+    async borrarMovDinero(id) {
+      await borrar('movs_dinero', id);
     }
   };
 }

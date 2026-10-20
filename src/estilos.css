@@ -292,7 +292,7 @@ h1 {
 
 .boton-grande {
   flex: 1;
-  min-height: 112px;
+  min-height: 96px;
   border-radius: 22px;
   border: 2px solid var(--barro-claro);
   background: var(--blanco);
@@ -1047,4 +1047,576 @@ body:has(.reporte) {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+/* ---------- Cobro: método de pago y apps ---------- */
+
+.hoja-cobro-arriba {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.hoja-cobro-total {
+  font-family: var(--fuente-titulo);
+  font-size: 36px;
+  font-weight: 800;
+}
+
+.hoja-cobro-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.metodos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.metodos-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metodo {
+  min-height: 76px;
+  border-radius: 18px;
+  border: 2px solid var(--barro-claro);
+  background: var(--blanco);
+  color: var(--carbon);
+  font-size: 20px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 10px;
+}
+
+.metodo-principal {
+  min-height: 92px;
+  background: var(--verde);
+  border-color: var(--verde);
+  color: var(--blanco);
+  font-family: var(--fuente-titulo);
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.metodo-app {
+  min-height: 64px;
+  font-size: 18px;
+  color: var(--blanco);
+  border: none;
+}
+
+/* Colores aproximados de cada app, oscurecidos para que el texto blanco se lea */
+.app-rappi {
+  background: #c8371d;
+}
+
+.app-uber {
+  background: #0f5b3a;
+}
+
+.app-didi {
+  background: #b35a00;
+}
+
+/* ---------- Opciones con un toque ---------- */
+
+.categorias {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.categoria {
+  min-height: 56px;
+  border-radius: 14px;
+  border: 2px solid var(--barro-claro);
+  background: var(--blanco);
+  font-size: 17px;
+  font-weight: 600;
+  padding: 0 6px;
+}
+
+.categoria.elegida,
+.segmento.elegido,
+.chip.elegido {
+  background: var(--carbon);
+  border-color: var(--carbon);
+  color: var(--blanco);
+}
+
+.segmentos {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.segmento {
+  flex: 1;
+  min-height: 56px;
+  border-radius: 14px;
+  border: 2px solid var(--barro-claro);
+  background: var(--blanco);
+  font-size: 17px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.pestanas .segmento {
+  white-space: normal;
+  line-height: 1.2;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  min-height: 48px;
+  border-radius: 999px;
+  border: 2px solid var(--barro-claro);
+  background: var(--blanco);
+  padding: 0 16px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.dos-columnas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.nota {
+  margin: 0;
+  font-size: 15px;
+  color: var(--gris);
+}
+
+/* ---------- Renglones del ticket ---------- */
+
+.renglones {
+  display: flex;
+  flex-direction: column;
+  border: 2px solid var(--barro-borde);
+  border-radius: 18px;
+  background: var(--blanco);
+  overflow: hidden;
+}
+
+.renglon {
+  min-height: 60px;
+  border: none;
+  border-bottom: 1px solid #f0e4da;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  text-align: left;
+}
+
+.renglon:last-child {
+  border-bottom: none;
+}
+
+.renglon-nombre {
+  flex: 1;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.renglon-cantidad {
+  font-size: 16px;
+  color: var(--gris);
+}
+
+.renglon-total {
+  font-size: 18px;
+  font-weight: 600;
+  min-width: 72px;
+  text-align: right;
+}
+
+/* ---------- Inventario ---------- */
+
+.lista-inventario {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fila-inventario {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px 12px 16px;
+  border-radius: 18px;
+  border: 2px solid var(--barro-borde);
+  background: var(--blanco);
+}
+
+.fila-inventario.agotado {
+  opacity: 0.65;
+}
+
+.fila-inventario-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fila-inventario-nombre {
+  font-family: var(--fuente-titulo);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.fila-inventario-cantidad {
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.fila-inventario-valor {
+  font-weight: 400;
+  color: var(--gris);
+  font-size: 16px;
+}
+
+.btn-sacar {
+  flex: none;
+  min-height: 60px;
+  min-width: 104px;
+  font-size: 21px;
+}
+
+.fila-baja {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 17px;
+  border-bottom: 1px solid var(--barro-borde);
+  padding: 4px 0;
+}
+
+.vacio p {
+  margin: 0;
+  color: var(--gris);
+}
+
+/* ---------- Mis números ---------- */
+
+.solo-pantalla {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.explica {
+  margin: 0;
+  font-size: 17px;
+  color: var(--gris);
+}
+
+.aviso-alerta {
+  background: #fff1d6;
+  color: #6b4500;
+  font-weight: 400;
+  font-size: 16px;
+}
+
+.aviso-con-boton {
+  flex-wrap: wrap;
+}
+
+.aviso-con-boton .btn {
+  flex: none;
+  min-height: 48px;
+  font-size: 18px;
+}
+
+.bloque-num {
+  background: var(--blanco);
+  border: 2px solid var(--barro-borde);
+  border-radius: 20px;
+  padding: 6px 16px;
+}
+
+.bloque-num-titulo {
+  margin: 10px 0 2px;
+  font-size: 15px;
+  font-family: var(--fuente);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--barro-oscuro);
+}
+
+.renglon-num {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  border-bottom: 1px solid #f0e4da;
+}
+
+.renglon-num:last-child {
+  border-bottom: none;
+}
+
+.renglon-num.sangria {
+  padding-left: 16px;
+  min-height: 40px;
+}
+
+.renglon-num.sangria .renglon-num-titulo,
+.renglon-num.sangria .renglon-num-monto {
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--gris);
+}
+
+.renglon-num-texto {
+  display: flex;
+  flex-direction: column;
+}
+
+.renglon-num-titulo {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.renglon-num-sub {
+  font-size: 14px;
+  color: var(--gris);
+}
+
+.renglon-num-monto {
+  font-size: 19px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.renglon-num-monto.resta {
+  color: var(--rojo);
+}
+
+.renglon-num.fuerte .renglon-num-titulo,
+.renglon-num.fuerte .renglon-num-monto {
+  font-family: var(--fuente-titulo);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.numeros .cuadro-ganancia {
+  color: var(--blanco);
+}
+
+.cuadra {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--verde-claro);
+  color: var(--verde);
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.cuadra.no {
+  background: #fde8e6;
+  color: var(--rojo);
+}
+
+.acciones-num {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.btn-numeros {
+  margin-top: 4px;
+}
+
+/* ---------- Caja y cuentas ---------- */
+
+.fila-dato {
+  min-height: 60px;
+  border-radius: 16px;
+  border: 2px solid var(--barro-borde);
+  background: var(--blanco);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px 0 16px;
+  text-align: left;
+  font-size: 18px;
+}
+
+.fila-dato > span:first-child {
+  flex: 1;
+}
+
+.fila-dato-valor {
+  font-weight: 600;
+  font-size: 19px;
+}
+
+.btn-icono-chico {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: 12px;
+  border: none;
+  background: transparent;
+  color: var(--rojo);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fila-deuda {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 8px 10px 16px;
+  border-radius: 16px;
+  border: 2px solid var(--barro-borde);
+  background: var(--blanco);
+}
+
+.fila-deuda-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fila-deuda-nombre {
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.fila-deuda-saldo {
+  font-size: 16px;
+  color: var(--gris);
+}
+
+/* ---------- PDF para el contador (solo al imprimir) ---------- */
+
+.hoja-contable {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: letter;
+    margin: 18mm;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+
+  .solo-pantalla {
+    display: none !important;
+  }
+
+  .pantalla {
+    padding: 0;
+    max-width: none;
+    min-height: 0;
+  }
+
+  .hoja-contable {
+    display: block;
+    color: #000000;
+    font-family: var(--fuente);
+    font-size: 11pt;
+  }
+
+  .hc-encabezado {
+    text-align: center;
+    margin-bottom: 14pt;
+  }
+
+  .hc-salto {
+    break-before: page;
+  }
+
+  .hc-negocio {
+    font-size: 14pt;
+    font-weight: 600;
+  }
+
+  .hc-titulo {
+    font-size: 16pt;
+    font-weight: 600;
+    margin-top: 2pt;
+  }
+
+  .hc-periodo {
+    font-size: 11pt;
+    color: #333333;
+  }
+
+  .hc-tabla {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .hc-tabla td {
+    padding: 3pt 0;
+    border-bottom: 0.5pt solid #dddddd;
+  }
+
+  .hc-tabla td.i {
+    padding-left: 14pt;
+  }
+
+  .hc-tabla td.n {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .hc-tabla tr.s td {
+    font-weight: 600;
+    padding-top: 10pt;
+    border-bottom: none;
+  }
+
+  .hc-tabla tr.t td {
+    font-weight: 600;
+    border-top: 0.75pt solid #000000;
+  }
+
+  .hc-tabla tr.tt td {
+    border-bottom: 2pt double #000000;
+  }
+
+  .hc-nota {
+    margin-top: 18pt;
+    font-size: 9pt;
+    color: #444444;
+  }
 }

@@ -66,6 +66,15 @@ export function Inicio({ ir }: { ir: (p: Pantalla) => void }) {
           <span className="boton-grande-sub">Registra lo que compraste</span>
         </span>
       </button>
+      <button type="button" className="boton-grande" onClick={() => ir('inventario')}>
+        <span className="icono-acento">
+          <Icono nombre="caja" tam={52} grosor={1.8} />
+        </span>
+        <span className="boton-grande-pila">
+          <span className="boton-grande-texto">Inventario</span>
+          <span className="boton-grande-sub">Saca lo que usaste hoy</span>
+        </span>
+      </button>
       <button type="button" className="boton-grande" onClick={() => ir('reporte')}>
         <span className="icono-acento">
           <Icono nombre="microfono" tam={52} grosor={1.8} />

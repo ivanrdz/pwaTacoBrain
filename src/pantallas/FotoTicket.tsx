@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { almacen } from '../data/almacen';
+import { guardarCompra } from '../data/operaciones';
+import { CATEGORIAS, NOMBRE_CATEGORIA, type Categoria, type Cuenta, type Insumo, type ItemCompra } from '../data/tipos';
 import { dinero } from '../lib/dinero';
 import { fechaBonita, fechaISO } from '../lib/fechas';
 import { nuevoId } from '../lib/id';
 import { comprimirFoto } from '../lib/imagen';
 import { Encabezado } from '../componentes/Encabezado';
+import { EditorRenglon } from '../componentes/EditorRenglon';
 import { Icono } from '../componentes/Icono';
 import { TecladoNumerico } from '../componentes/TecladoNumerico';
 
@@ -19,18 +22,26 @@ export function FotoTicket({ regresar }: { regresar: () => void }) {
   const [proveedor, setProveedor] = useState('');
   const [fecha, setFecha] = useState(fechaISO(new Date()));
   const [total, setTotal] = useState<number | null>(null);
+  const [categoria, setCategoria] = useState<Categoria>('insumos');
+  const [cuenta, setCuenta] = useState<Cuenta>('efectivo');
+  const [items, setItems] = useState<ItemCompra[]>([]);
+  const [insumos, setInsumos] = useState<Insumo[]>([]);
+  const [editando, setEditando] = useState<number | 'nuevo' | null>(null);
   const [problema, setProblema] = useState<string | null>(null);
   const [teclado, setTeclado] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [gastadoHoy, setGastadoHoy] = useState<number | null>(null);
 
-  useEffect(() => () => {
-    if (vista) URL.revokeObjectURL(vista);
-  }, [vista]);
+  useEffect(() => {
+    a.listarInsumos().then(setInsumos).catch(() => undefined);
+  }, [a]);
 
-  function abrirCamara() {
-    entrada.current?.click();
-  }
+  useEffect(
+    () => () => {
+      if (vista) URL.revokeObjectURL(vista);
+    },
+    [vista]
+  );
 
   async function alElegir(e: ChangeEvent<HTMLInputElement>) {
     const archivo = e.target.files?.[0];
@@ -45,11 +56,18 @@ export function FotoTicket({ regresar }: { regresar: () => void }) {
       setProveedor(r.proveedor ?? '');
       setFecha(r.fecha ?? fechaISO(new Date()));
       setTotal(r.total);
-      if (!r.total) setProblema('No pude leer el total. Escríbelo tú.');
+      setCategoria(r.categoria ?? 'insumos');
+      setItems(r.items ?? []);
+      if (!r.total) {
+        setProblema('No pude leer el total. Escríbelo tú.');
+        setTeclado(true);
+      }
     } catch (e) {
       setProveedor('');
       setFecha(fechaISO(new Date()));
       setTotal(null);
+      setCategoria('insumos');
+      setItems([]);
       if ((e as Error)?.message === 'sin-lector') setProblema('En esta demo escribe el total. En la versión final se lee solo de la foto.');
       else setProblema(navigator.onLine ? 'No pude leer el ticket. Escribe el total.' : 'Sin internet. Escribe el total y se guarda igual.');
       setTeclado(true);
@@ -62,7 +80,11 @@ export function FotoTicket({ regresar }: { regresar: () => void }) {
     setGuardando(true);
     try {
       const comprimida = foto && a.modo === 'nube' && navigator.onLine ? await comprimirFoto(foto) : undefined;
-      await a.registrarGasto({ id: nuevoId(), proveedor: proveedor.trim(), fecha, total, creadoEn: new Date().toISOString() }, comprimida);
+      await guardarCompra(
+        a,
+        { id: nuevoId(), proveedor: proveedor.trim(), fecha, total, creadoEn: new Date().toISOString(), categoria, cuenta, items: categoria === 'insumos' ? items : [] },
+        comprimida
+      );
       const hoy = new Date();
       const gastos = await a.gastosEntre(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()), new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 1));
       setGastadoHoy(gastos.reduce((s, g) => s + g.total, 0));
@@ -81,8 +103,13 @@ export function FotoTicket({ regresar }: { regresar: () => void }) {
     setVista(null);
     setTotal(null);
     setProveedor('');
+    setItems([]);
+    setCategoria('insumos');
+    setCuenta('efectivo');
     setProblema(null);
   }
+
+  const sumaRenglones = items.reduce((s, it) => s + it.total, 0);
 
   return (
     <main className="pantalla foto">
@@ -90,7 +117,7 @@ export function FotoTicket({ regresar }: { regresar: () => void }) {
       <input ref={entrada} type="file" accept="image/*" capture="environment" hidden onChange={alElegir} />
 
       {paso === 'listo' && (
-        <button type="button" className="zona-foto" onClick={abrirCamara}>
+        <button type="button" className="zona-foto" onClick={() => entrada.current?.click()}>
           <span className="circulo-camara">
             <Icono nombre="camara" tam={64} grosor={1.8} />
           </span>
@@ -113,7 +140,7 @@ export function FotoTicket({ regresar }: { regresar: () => void }) {
           <div className="ficha">
             <label className="ficha-fila">
               <span className="ficha-etiqueta">Proveedor</span>
-              <input className="ficha-input" value={proveedor} onChange={(e) => setProveedor(e.target.value)} placeholder="¿A quién le compraste?" />
+              <input className="ficha-input" value={proveedor} onChange={(e) => setProveedor(e.target.value)} placeholder="¿A quién le pagaste?" />
             </label>
             <label className="ficha-fila">
               <span className="ficha-etiqueta">Fecha</span>
@@ -130,8 +157,58 @@ export function FotoTicket({ regresar }: { regresar: () => void }) {
               </button>
             </div>
           </div>
+
+          <div className="campo">
+            <span className="campo-etiqueta">¿Qué pagaste?</span>
+            <div className="categorias" role="radiogroup" aria-label="Tipo de gasto">
+              {CATEGORIAS.map((c) => (
+                <button key={c} type="button" role="radio" aria-checked={categoria === c} className={categoria === c ? 'categoria elegida' : 'categoria'} onClick={() => setCategoria(c)}>
+                  {NOMBRE_CATEGORIA[c]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="campo">
+            <span className="campo-etiqueta">¿Con qué pagaste?</span>
+            <div className="segmentos" role="radiogroup" aria-label="Con qué pagaste">
+              <button type="button" role="radio" aria-checked={cuenta === 'efectivo'} className={cuenta === 'efectivo' ? 'segmento elegido' : 'segmento'} onClick={() => setCuenta('efectivo')}>
+                <Icono nombre="billete" tam={22} /> Efectivo
+              </button>
+              <button type="button" role="radio" aria-checked={cuenta === 'banco'} className={cuenta === 'banco' ? 'segmento elegido' : 'segmento'} onClick={() => setCuenta('banco')}>
+                <Icono nombre="banco" tam={22} /> Banco o tarjeta
+              </button>
+            </div>
+          </div>
+
+          {categoria === 'insumos' && (
+            <div className="campo">
+              <span className="campo-etiqueta">¿Qué compraste? (entra a tu inventario)</span>
+              {items.length > 0 && (
+                <div className="renglones">
+                  {items.map((it, i) => (
+                    <button key={i} type="button" className="renglon" onClick={() => setEditando(i)}>
+                      <span className="renglon-nombre">{it.nombre}</span>
+                      <span className="renglon-cantidad">
+                        {it.cantidad} {it.unidad}
+                      </span>
+                      <span className="renglon-total">{it.total > 0 ? dinero(it.total) : '—'}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {items.length > 0 && total && Math.abs(sumaRenglones - total) > 0.5 && sumaRenglones > 0 && (
+                <p className="nota">Los renglones suman {dinero(sumaRenglones)}; el total del ticket se reparte entre ellos.</p>
+              )}
+              <button type="button" className="btn btn-claro" onClick={() => setEditando('nuevo')}>
+                <Icono nombre="mas" tam={24} grosor={2.6} />
+                Agregar lo que compraste
+              </button>
+              {items.length === 0 && <p className="nota">Si no agregas nada, esta compra cuenta directo como costo.</p>}
+            </div>
+          )}
+
           {vista && <img src={vista} alt="Foto del ticket" className="miniatura-confirmar" />}
-          <div className="relleno" />
           <button type="button" className="btn btn-verde btn-alto" onClick={guardar} disabled={!total || guardando}>
             <Icono nombre="palomita" tam={30} grosor={2.6} />
             {guardando ? 'Guardando…' : 'Sí, guardar'}
@@ -167,6 +244,19 @@ export function FotoTicket({ regresar }: { regresar: () => void }) {
             setTotal(n);
             setProblema(null);
             setTeclado(false);
+          }}
+        />
+      )}
+
+      {editando !== null && (
+        <EditorRenglon
+          inicial={editando === 'nuevo' ? null : items[editando]}
+          insumos={insumos}
+          onCancelar={() => setEditando(null)}
+          onBorrar={editando === 'nuevo' ? undefined : () => (setItems(items.filter((_, i) => i !== editando)), setEditando(null))}
+          onGuardar={(r) => {
+            setItems(editando === 'nuevo' ? [...items, r] : items.map((x, i) => (i === editando ? r : x)));
+            setEditando(null);
           }}
         />
       )}

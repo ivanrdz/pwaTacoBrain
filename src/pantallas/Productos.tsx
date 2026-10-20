@@ -10,7 +10,7 @@ import { TecladoNumerico } from '../componentes/TecladoNumerico';
 
 type Edicion = Producto & { nuevo: boolean };
 
-export function Productos({ regresar }: { regresar: () => void }) {
+export function Productos({ regresar, irDinero }: { regresar: () => void; irDinero: () => void }) {
   const a = almacen();
   const [productos, setProductos] = useState<Producto[]>([]);
   const [nombre, setNombre] = useState('');
@@ -108,6 +108,14 @@ export function Productos({ regresar }: { regresar: () => void }) {
         <button type="button" className="btn btn-acento btn-alto" onClick={nuevo}>
           <Icono nombre="mas" tam={28} grosor={2.6} />
           Agregar producto
+        </button>
+      </section>
+
+      <section className="seccion seccion-extra">
+        <button type="button" className="fila-producto" onClick={irDinero}>
+          <Icono nombre="banco" tam={26} />
+          <span className="fila-producto-nombre">Caja, equipo, deudas y comisiones</span>
+          <Icono nombre="regresar" tam={20} />
         </button>
       </section>
 

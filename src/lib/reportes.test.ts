@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { entenderPregunta, respuestaHablada, resumir } from './reportes';
+import { entenderPregunta, masVendido, respuestaHablada, type Resumen } from './reportes';
 import { rangoDe } from './fechas';
 import { dinero } from './dinero';
+import { estadoResultados } from './finanzas';
 import type { Gasto, Venta } from '../data/tipos';
 
 describe('entenderPregunta', () => {
@@ -31,33 +32,42 @@ describe('rangoDe', () => {
   });
 });
 
-describe('resumir y respuestaHablada', () => {
+describe('respuestaHablada', () => {
+  const base = { creadaEn: '', metodo: 'efectivo' as const, canal: 'mostrador' as const, comision: 0 };
   const ventas: Venta[] = [
-    { id: '1', total: 75, creadaEn: '', items: [{ productoId: 'a', nombre: 'Taco de bistec', precio: 25, cantidad: 3 }] },
-    { id: '2', total: 47, creadaEn: '', items: [{ productoId: 'b', nombre: 'Taco al pastor', precio: 22, cantidad: 1 }, { productoId: 'a', nombre: 'Taco de bistec', precio: 25, cantidad: 1 }] }
+    { ...base, id: '1', total: 75, items: [{ productoId: 'a', nombre: 'Taco de bistec', precio: 25, cantidad: 3 }] },
+    { ...base, id: '2', total: 47, items: [{ productoId: 'b', nombre: 'Taco al pastor', precio: 22, cantidad: 1 }, { productoId: 'a', nombre: 'Taco de bistec', precio: 25, cantidad: 1 }] }
   ];
-  const gastos: Gasto[] = [{ id: 'g', proveedor: 'Carnes', fecha: '2026-10-10', total: 100, creadoEn: '' }];
+  const gastos: Gasto[] = [{ id: 'g', proveedor: 'Carnes', fecha: '2026-10-10', total: 100, creadoEn: '', categoria: 'insumos', cuenta: 'efectivo', items: [] }];
+  const resumen = (v: Venta[], g: Gasto[]): Resumen => ({ er: estadoResultados(v, g, 0), masVendido: masVendido(v) });
 
-  it('suma ventas, gastos y producto más vendido', () => {
-    const r = resumir(ventas, gastos);
-    expect(r.ventas).toBe(122);
-    expect(r.gastos).toBe(100);
-    expect(r.ganancia).toBe(22);
-    expect(r.masVendido).toEqual({ nombre: 'Taco de bistec', cantidad: 4 });
+  it('encuentra el producto más vendido', () => {
+    expect(masVendido(ventas)).toEqual({ nombre: 'Taco de bistec', cantidad: 4 });
   });
 
   it('arma la frase completa', () => {
-    const texto = respuestaHablada(resumir(ventas, gastos), rangoDe('semana'), 'todo');
-    expect(texto).toBe('Esta semana vendiste 122 pesos en 2 ventas, gastaste 100 pesos y te quedaron 22 pesos de ganancia. Lo que más vendiste fue taco de bistec, 4 piezas.');
+    const texto = respuestaHablada(resumen(ventas, gastos), rangoDe('semana'), 'todo');
+    expect(texto).toBe('Esta semana vendiste 122 pesos en 2 ventas. Lo que usaste de insumos costó 100 pesos. Te quedaron 22 pesos de ganancia. Lo que más vendiste fue taco de bistec, 4 piezas.');
+  });
+
+  it('menciona comisiones cuando hay', () => {
+    const conTarjeta: Venta[] = [{ ...ventas[0], metodo: 'tarjeta', comision: 5 }];
+    const texto = respuestaHablada(resumen(conTarjeta, []), rangoDe('hoy'), 'todo');
+    expect(texto).toBe('Hoy vendiste 75 pesos en 1 venta. Se fueron 5 pesos en comisiones. Te quedaron 70 pesos de ganancia. Lo que más vendiste fue taco de bistec, 3 piezas.');
   });
 
   it('en pantalla usa formato de dinero', () => {
-    const texto = respuestaHablada(resumir(ventas, gastos), rangoDe('semana'), 'ganancia', dinero);
+    const texto = respuestaHablada(resumen(ventas, gastos), rangoDe('semana'), 'ganancia', dinero);
     expect(texto).toBe(`Esta semana te quedaron ${dinero(22)} de ganancia.`);
   });
 
   it('avisa cuando hay pérdida', () => {
-    const texto = respuestaHablada(resumir([], gastos), rangoDe('hoy'), 'ganancia');
+    const texto = respuestaHablada(resumen([], gastos), rangoDe('hoy'), 'ganancia');
     expect(texto).toBe('Hoy perdiste 100 pesos, porque gastaste más de lo que vendiste.');
+  });
+
+  it('resume los gastos', () => {
+    const texto = respuestaHablada(resumen(ventas, gastos), rangoDe('ayer'), 'gastos');
+    expect(texto).toBe('Ayer compraste 100 pesos de insumos.');
   });
 });

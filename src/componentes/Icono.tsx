@@ -50,7 +50,62 @@ const TRAZOS = {
       <path d="M17 9l-6 6M11 9l6 6" />
     </>
   ),
-  nube: <path d="M7 18a5 5 0 1 1 1-9.9A6 6 0 0 1 19.5 10 4 4 0 0 1 18 18H7z" />
+  nube: <path d="M7 18a5 5 0 1 1 1-9.9A6 6 0 0 1 19.5 10 4 4 0 0 1 18 18H7z" />,
+  billete: (
+    <>
+      <rect x="2" y="6" width="20" height="12" rx="2" />
+      <circle cx="12" cy="12" r="2.5" />
+      <path d="M6 9.5v5M18 9.5v5" />
+    </>
+  ),
+  transferencia: (
+    <>
+      <path d="M4 8h14l-3-3" />
+      <path d="M20 16H6l3 3" />
+    </>
+  ),
+  tarjeta: (
+    <>
+      <rect x="2" y="5" width="20" height="14" rx="2" />
+      <path d="M2 10h20M6 15h4" />
+    </>
+  ),
+  moto: (
+    <>
+      <circle cx="6" cy="17" r="3" />
+      <circle cx="18" cy="17" r="3" />
+      <path d="M6 17h6l3-7h3M12 17l-2-6H7M15 10l-1-3h-3" />
+    </>
+  ),
+  caja: (
+    <>
+      <path d="M3 8l9-5 9 5v8l-9 5-9-5V8z" />
+      <path d="M3 8l9 5 9-5M12 13v8" />
+    </>
+  ),
+  grafica: (
+    <>
+      <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+    </>
+  ),
+  banco: (
+    <>
+      <path d="M3 10l9-6 9 6" />
+      <path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18" />
+    </>
+  ),
+  documento: (
+    <>
+      <path d="M6 2h9l5 5v15H6z" />
+      <path d="M14 2v6h6M9 13h8M9 17h8" />
+    </>
+  ),
+  persona: (
+    <>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    </>
+  )
 };
 
 export type NombreIcono = keyof typeof TRAZOS;

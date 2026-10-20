@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { almacen } from '../data/almacen';
-import type { Producto, Venta } from '../data/tipos';
+import { CONFIG_INICIAL, NOMBRE_CANAL, NOMBRE_METODO, porcentajeComision, type Canal, type Comisiones, type MetodoPago, type Producto, type Venta } from '../data/tipos';
 import { dinero } from '../lib/dinero';
 import { nuevoId } from '../lib/id';
 import { Encabezado } from '../componentes/Encabezado';
@@ -22,10 +22,15 @@ export function Vender({ regresar, ir }: { regresar: () => void; ir: (p: 'produc
   const [orden, setOrden] = useState<Record<string, number>>({});
   const [aviso, setAviso] = useState<Aviso | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [hojaCobro, setHojaCobro] = useState(false);
+  const [comisiones, setComisiones] = useState<Comisiones>(CONFIG_INICIAL.comisiones);
   const temporizador = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     a.listarProductos().then(setProductos).catch(() => setProductos([]));
+    a.config()
+      .then((c) => setComisiones(c.comisiones))
+      .catch(() => undefined);
     return () => window.clearTimeout(temporizador.current);
   }, [a]);
 
@@ -57,20 +62,26 @@ export function Vender({ regresar, ir }: { regresar: () => void; ir: (p: 'produc
     if (aviso?.tipo === 'error') setAviso(null);
   }
 
-  async function cobrar() {
+  async function cobrar(metodo: MetodoPago, canal: Canal) {
     if (!productos || piezas === 0 || guardando) return;
+    const pct = porcentajeComision(comisiones, metodo, canal);
     const venta: Venta = {
       id: nuevoId(),
       total,
       creadaEn: new Date().toISOString(),
+      metodo,
+      canal,
+      comision: Math.round(total * pct) / 100,
       items: productos.filter((p) => orden[p.id]).map((p) => ({ productoId: p.id, nombre: p.nombre, precio: p.precio, cantidad: orden[p.id] }))
     };
+    setHojaCobro(false);
     setGuardando(true);
     try {
       await a.registrarVenta(venta);
       setOrden({});
       navigator.vibrate?.(60);
-      mostrar({ tipo: 'ok', texto: `Venta de ${dinero(total)} guardada`, ventaId: venta.id }, 6000);
+      const como = canal === 'mostrador' ? NOMBRE_METODO[metodo] : NOMBRE_CANAL[canal];
+      mostrar({ tipo: 'ok', texto: `Venta de ${dinero(total)} guardada · ${como}`, ventaId: venta.id }, 6000);
     } catch {
       mostrar({ tipo: 'error', texto: 'No se pudo guardar. Intenta otra vez.' }, 5000);
     } finally {
@@ -147,11 +158,49 @@ export function Vender({ regresar, ir }: { regresar: () => void; ir: (p: 'produc
           <button type="button" className="btn-limpiar" onClick={() => setOrden({})} disabled={piezas === 0} aria-label="Borrar la orden">
             <Icono nombre="basura" tam={28} />
           </button>
-          <button type="button" className="btn btn-verde btn-cobrar" onClick={cobrar} disabled={piezas === 0 || guardando}>
+          <button type="button" className="btn btn-verde btn-cobrar" onClick={() => setHojaCobro(true)} disabled={piezas === 0 || guardando}>
             {guardando ? 'Guardando…' : 'Cobrar'}
           </button>
         </div>
       </footer>
+
+      {hojaCobro && (
+        <div className="teclado-fondo" role="dialog" aria-modal="true" aria-label="¿Cómo te pagaron?">
+          <div className="teclado">
+            <div className="hoja-cobro-arriba">
+              <span className="teclado-titulo">¿Cómo te pagaron?</span>
+              <span className="hoja-cobro-total">{dinero(total)}</span>
+            </div>
+            <button type="button" className="metodo metodo-principal" onClick={() => cobrar('efectivo', 'mostrador')}>
+              <Icono nombre="billete" tam={36} />
+              Efectivo
+            </button>
+            <div className="metodos">
+              <button type="button" className="metodo" onClick={() => cobrar('transferencia', 'mostrador')}>
+                <Icono nombre="transferencia" tam={30} />
+                Transferencia
+              </button>
+              <button type="button" className="metodo" onClick={() => cobrar('tarjeta', 'mostrador')}>
+                <Icono nombre="tarjeta" tam={30} />
+                Tarjeta
+              </button>
+            </div>
+            <div className="teclado-titulo hoja-cobro-sub">
+              <Icono nombre="moto" tam={22} /> Pedido de app
+            </div>
+            <div className="metodos metodos-3">
+              {(['rappi', 'uber', 'didi'] as const).map((c) => (
+                <button key={c} type="button" className={`metodo metodo-app app-${c}`} onClick={() => cobrar('app', c)}>
+                  {NOMBRE_CANAL[c]}
+                </button>
+              ))}
+            </div>
+            <button type="button" className="btn btn-claro" onClick={() => setHojaCobro(false)}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

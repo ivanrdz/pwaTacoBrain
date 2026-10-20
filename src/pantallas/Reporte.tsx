@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { almacen } from '../data/almacen';
 import { dinero } from '../lib/dinero';
 import { rangoDe, type Periodo } from '../lib/fechas';
-import { entenderPregunta, respuestaHablada, resumir, type Enfoque, type Resumen } from '../lib/reportes';
+import { calcularNumeros } from '../data/operaciones';
+import { entenderPregunta, respuestaHablada, type Enfoque, type Resumen } from '../lib/reportes';
 import { callar, escuchar, hablar, puedeEscuchar, type Escucha } from '../lib/voz';
 import { Encabezado } from '../componentes/Encabezado';
 import { Icono } from '../componentes/Icono';
@@ -16,7 +17,7 @@ const RAPIDAS: { texto: string; periodo: Periodo }[] = [
   { texto: 'Este mes', periodo: 'mes' }
 ];
 
-export function Reporte({ regresar }: { regresar: () => void }) {
+export function Reporte({ regresar, irNumeros }: { regresar: () => void; irNumeros: () => void }) {
   const a = almacen();
   const [estado, setEstado] = useState<Estado>('listo');
   const [escuchado, setEscuchado] = useState<string | null>(null);
@@ -40,8 +41,7 @@ export function Reporte({ regresar }: { regresar: () => void }) {
     setEstado('pensando');
     try {
       const rango = rangoDe(periodo);
-      const [ventas, gastos] = await Promise.all([a.ventasEntre(rango.desde, rango.hasta), a.gastosEntre(rango.desde, rango.hasta)]);
-      const r = resumir(ventas, gastos);
+      const r = (await calcularNumeros(a, rango)).resumen;
       const paraOir = respuestaHablada(r, rango, enfoque);
       setResumen(r);
       setNombreRango(rango.nombre);
@@ -121,16 +121,16 @@ export function Reporte({ regresar }: { regresar: () => void }) {
           <div className="cuadros">
             <div className="cuadro">
               <span className="cuadro-etiqueta">Vendiste</span>
-              <span className="cuadro-cifra">{dinero(resumen.ventas)}</span>
+              <span className="cuadro-cifra">{dinero(resumen.er.ventasBrutas)}</span>
             </div>
             <div className="cuadro">
-              <span className="cuadro-etiqueta">Gastaste</span>
-              <span className="cuadro-cifra">{dinero(resumen.gastos)}</span>
+              <span className="cuadro-etiqueta">Costos y gastos</span>
+              <span className="cuadro-cifra">{dinero(resumen.er.comisiones + resumen.er.costoVentas + resumen.er.totalGastosOperacion)}</span>
             </div>
           </div>
-          <div className={resumen.ganancia >= 0 ? 'cuadro-ganancia' : 'cuadro-ganancia perdida'}>
-            <span className="cuadro-etiqueta">{resumen.ganancia >= 0 ? `Ganancia de ${nombreRango}` : `Pérdida de ${nombreRango}`}</span>
-            <span className="cuadro-cifra-grande">{dinero(Math.abs(resumen.ganancia))}</span>
+          <div className={resumen.er.utilidadNeta >= 0 ? 'cuadro-ganancia' : 'cuadro-ganancia perdida'}>
+            <span className="cuadro-etiqueta">{resumen.er.utilidadNeta >= 0 ? `Ganancia de ${nombreRango}` : `Pérdida de ${nombreRango}`}</span>
+            <span className="cuadro-cifra-grande">{dinero(Math.abs(resumen.er.utilidadNeta))}</span>
           </div>
           <div className="reporte-acciones">
             <button type="button" className="btn btn-oscuro" onClick={() => hablar(respuesta)}>
@@ -154,6 +154,10 @@ export function Reporte({ regresar }: { regresar: () => void }) {
           </button>
         ))}
       </div>
+      <button type="button" className="btn btn-oscuro btn-ancho btn-numeros" onClick={irNumeros}>
+        <Icono nombre="grafica" tam={24} />
+        Estado de resultados y balance
+      </button>
     </main>
   );
 }
