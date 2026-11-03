@@ -25,8 +25,10 @@ export interface ExistenciaInsumo {
 export interface Valuacion {
   porInsumo: ExistenciaInsumo[];
   valorTotal: number;
-  /** Costo de lo que se sacó con fecha >= desde */
+  /** Costo de lo que se sacó para vender con fecha >= desde */
   costoBajas: number;
+  /** Costo de lo que se echó a perder o se tiró con fecha >= desde */
+  costoMerma: number;
   /** Insumos a los que se les sacó más de lo que había */
   sinExistencia: string[];
 }
@@ -37,6 +39,7 @@ export function valuarInventario(insumos: Insumo[], movs: MovInventario[], desde
   for (const i of insumos) estado.set(i.id, { cantidad: 0, valor: 0, ultimoCosto: 0 });
   const orden = [...movs].sort((a, b) => (a.fecha === b.fecha ? a.creadoEn.localeCompare(b.creadoEn) : a.fecha.localeCompare(b.fecha)));
   let costoBajas = 0;
+  let costoMerma = 0;
   const sinExistencia = new Set<string>();
 
   for (const m of orden) {
@@ -61,7 +64,10 @@ export function valuarInventario(insumos: Insumo[], movs: MovInventario[], desde
         e.cantidad = 0;
         e.valor = 0;
       }
-      if (!desde || m.fecha >= desde) costoBajas += costo;
+      if (!desde || m.fecha >= desde) {
+        if (m.motivo === 'merma') costoMerma += costo;
+        else costoBajas += costo;
+      }
     }
   }
 
@@ -79,6 +85,7 @@ export function valuarInventario(insumos: Insumo[], movs: MovInventario[], desde
     porInsumo,
     valorTotal: redondear(porInsumo.reduce((s, x) => s + x.valor, 0)),
     costoBajas: redondear(costoBajas),
+    costoMerma: redondear(costoMerma),
     sinExistencia: [...sinExistencia].map((id) => nombres.get(id) ?? 'Insumo')
   };
 }
@@ -123,6 +130,8 @@ export interface EstadoResultados {
   comisiones: number;
   ventasNetas: number;
   costoInventario: number;
+  /** Lo que se echó a perder o se tiró (también es costo) */
+  merma: number;
   costoSinDesglose: number;
   costoVentas: number;
   utilidadBruta: number;
@@ -133,7 +142,7 @@ export interface EstadoResultados {
   comprasInsumos: number;
 }
 
-export function estadoResultados(ventas: Venta[], gastos: Gasto[], costoInventario: number): EstadoResultados {
+export function estadoResultados(ventas: Venta[], gastos: Gasto[], costoInventario: number, merma = 0): EstadoResultados {
   const porCanal: Record<Canal, number> = { mostrador: 0, rappi: 0, uber: 0, didi: 0 };
   const porMetodo: Record<MetodoPago, number> = { efectivo: 0, transferencia: 0, tarjeta: 0, app: 0 };
   let ventasBrutas = 0;
@@ -159,7 +168,7 @@ export function estadoResultados(ventas: Venta[], gastos: Gasto[], costoInventar
   }
   const comisiones = comisionesBanco + comisionesApps;
   const ventasNetas = ventasBrutas - comisiones;
-  const costoVentas = costoInventario + costoSinDesglose;
+  const costoVentas = costoInventario + merma + costoSinDesglose;
   const utilidadBruta = ventasNetas - costoVentas;
   const totalGastosOperacion = CATEGORIAS_OPERACION.reduce((s, c) => s + gastosOperacion[c], 0);
   const r = (n: number) => redondear(n);
@@ -173,6 +182,7 @@ export function estadoResultados(ventas: Venta[], gastos: Gasto[], costoInventar
     comisiones: r(comisiones),
     ventasNetas: r(ventasNetas),
     costoInventario: r(costoInventario),
+    merma: r(merma),
     costoSinDesglose: r(costoSinDesglose),
     costoVentas: r(costoVentas),
     utilidadBruta: r(utilidadBruta),

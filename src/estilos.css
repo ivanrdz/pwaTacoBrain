@@ -1620,3 +1620,264 @@ body:has(.reporte) {
     color: #444444;
   }
 }
+
+/* ---------- Mi negocio ---------- */
+
+.tarjeta-negocio {
+  background: var(--blanco);
+  border: 2px solid var(--barro-borde);
+  border-radius: 20px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tarjeta-negocio-titulo {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 22px;
+}
+
+.frase {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.45;
+}
+
+.barra {
+  height: 14px;
+  border-radius: 999px;
+  background: #f0e4da;
+  overflow: hidden;
+}
+
+.barra-oscura {
+  background: var(--carbon-3);
+  margin-top: 6px;
+}
+
+.barra-relleno {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--barro);
+  transition: width 0.4s ease;
+}
+
+.barra-relleno.verde {
+  background: var(--verde);
+}
+
+.barra-oscura .barra-relleno {
+  background: #f59e6b;
+}
+
+.barra-oscura .barra-relleno.verde {
+  background: #4cc27a;
+}
+
+.fila-barra {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 16px;
+}
+
+.fila-canal {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lista-simple {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lista-simple-fila {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 17px;
+  border-bottom: 1px solid #f0e4da;
+  padding-bottom: 6px;
+}
+
+.lista-simple-fila > span:last-child {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.alerta-precio {
+  background: #fff1d6;
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tabla-productos {
+  display: flex;
+  flex-direction: column;
+}
+
+.fila-rentable {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0e4da;
+}
+
+.fila-rentable:last-child {
+  border-bottom: none;
+}
+
+.fila-rentable-info,
+.fila-rentable-cifras {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fila-rentable-cifras {
+  align-items: flex-end;
+  text-align: right;
+  flex: none;
+}
+
+.fila-rentable-nombre {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.fila-rentable-cifras > span:first-child {
+  font-size: 19px;
+  font-weight: 800;
+  font-family: var(--fuente-titulo);
+}
+
+.positivo {
+  color: var(--verde);
+}
+
+.negativo {
+  color: var(--rojo);
+}
+
+.barras-dias {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  align-items: end;
+}
+
+.barra-dia {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--gris);
+}
+
+.barra-dia-columna {
+  width: 100%;
+  height: 96px;
+  display: flex;
+  align-items: flex-end;
+  background: #faf3ed;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.barra-dia-relleno {
+  width: 100%;
+  background: var(--barro-claro);
+  border-radius: 8px 8px 0 0;
+}
+
+.barra-dia-relleno.verde {
+  background: var(--verde);
+}
+
+/* ---------- Inicio: equilibrio y botón Mi negocio ---------- */
+
+.equilibrio-hoy {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--carbon-3);
+}
+
+.equilibrio-texto {
+  font-size: 15px;
+  color: var(--gris-claro);
+}
+
+.boton-chico {
+  min-height: 64px;
+  border-radius: 18px;
+  border: 2px dashed var(--barro-claro);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--barro-oscuro);
+  padding: 0 16px;
+}
+
+/* ---------- Inventario: merma ---------- */
+
+.fila-inventario-acciones {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  flex: none;
+}
+
+.btn-tirar {
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--rojo);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.etiqueta-merma {
+  color: var(--rojo);
+}
+
+/* ---------- Receta en el producto ---------- */
+
+.btn-limpio {
+  border: none;
+  background: transparent;
+  min-height: 44px;
+  padding: 0 6px;
+  text-decoration: underline;
+}
+
+.nota-fuerte {
+  color: var(--verde);
+  font-weight: 600;
+}
+
+.nota-mala {
+  color: var(--rojo);
+  font-weight: 600;
+}
+
+.hoja-producto {
+  max-height: 92dvh;
+}

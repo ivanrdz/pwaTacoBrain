@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { almacen } from '../data/almacen';
+import { calcularDecisiones } from '../data/operaciones';
 import { dinero } from '../lib/dinero';
 import { rangoDe } from '../lib/fechas';
 import { Icono } from '../componentes/Icono';
@@ -8,6 +9,7 @@ import type { Pantalla } from '../App';
 export function Inicio({ ir }: { ir: (p: Pantalla) => void }) {
   const [nombre, setNombre] = useState('');
   const [hoy, setHoy] = useState<{ ventas: number; num: number; gastos: number } | null>(null);
+  const [equilibrio, setEquilibrio] = useState<number | null>(null);
   const a = almacen();
 
   useEffect(() => {
@@ -20,6 +22,9 @@ export function Inicio({ ir }: { ir: (p: Pantalla) => void }) {
         setHoy({ ventas: v.reduce((s, x) => s + x.total, 0), num: v.length, gastos: g.reduce((s, x) => s + x.total, 0) });
       })
       .catch(() => vivo && setHoy({ ventas: 0, num: 0, gastos: 0 }));
+    calcularDecisiones(a)
+      .then((d) => vivo && setEquilibrio(d.equilibrio?.diario ?? null))
+      .catch(() => undefined);
     return () => {
       vivo = false;
     };
@@ -51,6 +56,16 @@ export function Inicio({ ir }: { ir: (p: Pantalla) => void }) {
           </div>
         </div>
         <div className="detalle">{hoy ? (hoy.num === 1 ? '1 venta cobrada' : `${hoy.num} ventas cobradas`) : ' '}</div>
+        {hoy && equilibrio !== null && (
+          <div className="equilibrio-hoy">
+            <div className="equilibrio-texto">
+              {hoy.ventas >= equilibrio ? '¡Hoy ya cubriste tus gastos!' : `Te faltan ${dinero(equilibrio - hoy.ventas)} para cubrir tus gastos de hoy`}
+            </div>
+            <div className="barra barra-oscura" role="presentation">
+              <div className={hoy.ventas >= equilibrio ? 'barra-relleno verde' : 'barra-relleno'} style={{ width: `${Math.min(100, (hoy.ventas / equilibrio) * 100)}%` }} />
+            </div>
+          </div>
+        )}
       </section>
 
       <button type="button" className="boton-grande principal" onClick={() => ir('vender')}>
@@ -83,6 +98,10 @@ export function Inicio({ ir }: { ir: (p: Pantalla) => void }) {
           <span className="boton-grande-texto">¿Cómo me fue?</span>
           <span className="boton-grande-sub">Pregunta y escucha tu semana</span>
         </span>
+      </button>
+      <button type="button" className="boton-chico" onClick={() => ir('negocio')}>
+        <Icono nombre="foco" tam={28} />
+        <span>Mi negocio: consejos, metas y precios</span>
       </button>
     </main>
   );

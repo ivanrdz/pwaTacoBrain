@@ -126,7 +126,8 @@ export function Numeros({ regresar, irDinero }: { regresar: () => void; irDinero
               <Renglon titulo="Te entró de verdad" monto={er.ventasNetas} fuerte />
             </Bloque>
             <Bloque titulo="Lo que te costó">
-              <Renglon titulo="Insumos que usaste" sub="Lo que sacaste del inventario y compras sin desglose" monto={er.costoVentas} resta />
+              <Renglon titulo="Insumos que usaste" sub="Lo que sacaste del inventario y compras sin desglose" monto={er.costoVentas - er.merma} resta />
+              {er.merma > 0 && <Renglon titulo="Se echó a perder" sub="Lo que tiraste del inventario" monto={er.merma} resta />}
               <Renglon titulo="Ganancia antes de gastos" monto={er.utilidadBruta} fuerte />
               {CATEGORIAS_OPERACION.map((c) => er.gastosOperacion[c] > 0 && <Renglon key={c} titulo={NOMBRE_CATEGORIA[c]} monto={er.gastosOperacion[c]} resta />)}
               {er.totalGastosOperacion === 0 && <Renglon titulo="Renta, gas, luz y sueldos" sub="No registraste" monto={0} resta />}
@@ -210,6 +211,9 @@ export function Numeros({ regresar, irDinero }: { regresar: () => void; irDinero
               <tr><td>(−) Comisiones de plataformas</td><td className="n">{dinero(er.comisionesApps)}</td></tr>
               <tr className="t"><td>Ventas netas</td><td className="n">{dinero(er.ventasNetas)}</td></tr>
               <tr><td>(−) Costo de ventas</td><td className="n">{dinero(er.costoVentas)}</td></tr>
+              {er.merma > 0 && (
+                <tr><td className="i">Incluye merma</td><td className="n">{dinero(er.merma)}</td></tr>
+              )}
               <tr className="t"><td>Utilidad bruta</td><td className="n">{dinero(er.utilidadBruta)}</td></tr>
               <tr><td>Gastos de operación</td><td /></tr>
               {CATEGORIAS_OPERACION.map((c) => (

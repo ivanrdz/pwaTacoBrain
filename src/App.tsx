@@ -10,8 +10,9 @@ import { Entrar } from './pantallas/Entrar';
 import { Inventario } from './pantallas/Inventario';
 import { Numeros } from './pantallas/Numeros';
 import { Dinero } from './pantallas/Dinero';
+import { MiNegocio } from './pantallas/MiNegocio';
 
-export type Pantalla = 'inicio' | 'vender' | 'foto' | 'reporte' | 'productos' | 'inventario' | 'numeros' | 'dinero';
+export type Pantalla = 'inicio' | 'vender' | 'foto' | 'reporte' | 'productos' | 'inventario' | 'numeros' | 'dinero' | 'negocio';
 
 export function App() {
   const [pantalla, setPantalla] = useState<Pantalla>('inicio');
@@ -60,6 +61,8 @@ export function App() {
       return <Numeros regresar={regresar} irDinero={() => ir('dinero')} />;
     case 'dinero':
       return <Dinero regresar={regresar} />;
+    case 'negocio':
+      return <MiNegocio regresar={regresar} irDinero={() => ir('dinero')} irProductos={() => ir('productos')} />;
     default:
       return <Inicio ir={ir} />;
   }

@@ -16,7 +16,7 @@ export function Inventario({ regresar, irFoto }: { regresar: () => void; irFoto:
   const a = almacen();
   const [val, setVal] = useState<Valuacion | null>(null);
   const [bajasHoy, setBajasHoy] = useState<MovInventario[]>([]);
-  const [sacando, setSacando] = useState<{ insumo: Insumo; existencia: number } | null>(null);
+  const [sacando, setSacando] = useState<{ insumo: Insumo; existencia: number; motivo: 'uso' | 'merma' } | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
 
   const recargar = useCallback(async () => {
@@ -36,12 +36,12 @@ export function Inventario({ regresar, irFoto }: { regresar: () => void; irFoto:
     void recargar();
   }, [recargar]);
 
-  async function sacar(insumo: Insumo, cantidad: number) {
+  async function sacar(insumo: Insumo, cantidad: number, motivo: 'uso' | 'merma') {
     setSacando(null);
     try {
-      await a.registrarMovInventario({ id: nuevoId(), insumoId: insumo.id, tipo: 'baja', cantidad, costo: 0, fecha: fechaISO(new Date()), creadoEn: new Date().toISOString() });
+      await a.registrarMovInventario({ id: nuevoId(), insumoId: insumo.id, tipo: 'baja', motivo, cantidad, costo: 0, fecha: fechaISO(new Date()), creadoEn: new Date().toISOString() });
       navigator.vibrate?.(60);
-      setAviso(`Sacaste ${cantidadBonita(cantidad)} ${insumo.unidad} de ${insumo.nombre}`);
+      setAviso(motivo === 'merma' ? `Anotado: se tiró ${cantidadBonita(cantidad)} ${insumo.unidad} de ${insumo.nombre}` : `Sacaste ${cantidadBonita(cantidad)} ${insumo.unidad} de ${insumo.nombre}`);
       await recargar();
     } catch {
       setAviso('No se pudo guardar. Intenta otra vez.');
@@ -97,9 +97,16 @@ export function Inventario({ regresar, irFoto }: { regresar: () => void; irFoto:
                 {existencia > 0 && <span className="fila-inventario-valor"> · {dinero(valor)}</span>}
               </span>
             </div>
-            <button type="button" className="btn btn-acento btn-sacar" onClick={() => setSacando({ insumo, existencia })} disabled={existencia <= 0}>
-              Sacar
-            </button>
+            <div className="fila-inventario-acciones">
+              <button type="button" className="btn btn-acento btn-sacar" onClick={() => setSacando({ insumo, existencia, motivo: 'uso' })} disabled={existencia <= 0}>
+                Sacar
+              </button>
+              {existencia > 0 && (
+                <button type="button" className="btn-tirar" onClick={() => setSacando({ insumo, existencia, motivo: 'merma' })}>
+                  Se echó a perder
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </section>
@@ -113,6 +120,7 @@ export function Inventario({ regresar, irFoto }: { regresar: () => void; irFoto:
               <div key={m.id} className="fila-baja">
                 <span>
                   {cantidadBonita(m.cantidad)} {ins?.unidad} de {ins?.nombre ?? 'insumo'}
+                  {m.motivo === 'merma' && <span className="etiqueta-merma"> · se tiró</span>}
                 </span>
                 <button type="button" className="btn-texto" onClick={() => deshacer(m)}>
                   Deshacer
@@ -125,12 +133,16 @@ export function Inventario({ regresar, irFoto }: { regresar: () => void; irFoto:
 
       {sacando && (
         <TecladoNumerico
-          titulo={`¿Cuánto sacaste de ${sacando.insumo.nombre}? Hay ${cantidadBonita(sacando.existencia)} ${sacando.insumo.unidad}`}
+          titulo={
+            sacando.motivo === 'merma'
+              ? `¿Cuánto ${sacando.insumo.nombre} se echó a perder o se tiró? Hay ${cantidadBonita(sacando.existencia)} ${sacando.insumo.unidad}`
+              : `¿Cuánto sacaste de ${sacando.insumo.nombre}? Hay ${cantidadBonita(sacando.existencia)} ${sacando.insumo.unidad}`
+          }
           formato="cantidad"
           unidad={NOMBRE_UNIDAD[sacando.insumo.unidad]}
           valorInicial={null}
           onCancelar={() => setSacando(null)}
-          onListo={(n) => sacar(sacando.insumo, Math.min(n, sacando.existencia))}
+          onListo={(n) => sacar(sacando.insumo, Math.min(n, sacando.existencia), sacando.motivo)}
         />
       )}
     </main>

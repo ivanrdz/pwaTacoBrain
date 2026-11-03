@@ -31,11 +31,16 @@ export function TecladoNumerico({
   permitirCero?: boolean;
 }) {
   const [texto, setTexto] = useState(valorInicial ? String(valorInicial) : '');
+  // Como en una calculadora: la primera tecla reemplaza el valor que ya había.
+  const [tocado, setTocado] = useState(false);
   const decimales = formato === 'cantidad' ? 3 : 2;
 
   function tocar(t: (typeof TECLAS)[number]) {
-    if (t === 'borrar') return setTexto((s) => s.slice(0, -1));
-    setTexto((s) => {
+    const primera = !tocado;
+    setTocado(true);
+    if (t === 'borrar') return setTexto((s) => (primera ? '' : s.slice(0, -1)));
+    setTexto((anterior) => {
+      const s = primera ? '' : anterior;
       if (t === '.' && s.includes('.')) return s;
       const nuevo = s === '0' && t !== '.' ? t : s === '' && t === '.' ? '0.' : s + t;
       const [, dec] = nuevo.split('.');

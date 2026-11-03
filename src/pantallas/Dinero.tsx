@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { almacen } from '../data/almacen';
-import { CONFIG_INICIAL, type Comisiones, type ConfigFinanzas, type Cuenta, type MovDinero } from '../data/tipos';
+import { CONFIG_INICIAL, type Comisiones, type ConfigFinanzas, type Cuenta, type GastosFijos, type MovDinero } from '../data/tipos';
 import { dinero } from '../lib/dinero';
 import { fechaBonita, fechaISO } from '../lib/fechas';
 import { nuevoId } from '../lib/id';
@@ -14,6 +14,14 @@ const COMISIONES: { clave: keyof Comisiones; texto: string }[] = [
   { clave: 'rappi', texto: 'Rappi' },
   { clave: 'uber', texto: 'Uber Eats' },
   { clave: 'didi', texto: 'DiDi Food' }
+];
+
+const FIJOS: { clave: keyof GastosFijos; texto: string }[] = [
+  { clave: 'renta', texto: 'Renta' },
+  { clave: 'gas', texto: 'Gas' },
+  { clave: 'luz', texto: 'Luz y agua' },
+  { clave: 'sueldos', texto: 'Sueldos' },
+  { clave: 'otro', texto: 'Otros' }
 ];
 
 interface Teclado {
@@ -118,6 +126,45 @@ export function Dinero({ regresar }: { regresar: () => void }) {
         <button type="button" className="fila-dato" onClick={() => setTeclado({ titulo: 'Dinero en el banco al empezar', formato: 'dinero', valor: config.bancoInicial || null, permitirCero: true, listo: (n) => guardar({ ...config, bancoInicial: n }) })}>
           <span>Dinero en el banco</span>
           <span className="fila-dato-valor">{dinero(config.bancoInicial)}</span>
+        </button>
+      </section>
+
+      <section className="seccion">
+        <div className="seccion-titulo">Gastos fijos al mes</div>
+        <p className="seccion-texto">Lo que pagas cada mes aunque no vendas. Con esto la app te dice cuánto vender al día y cuánto apartar.</p>
+        {FIJOS.map(({ clave, texto }) => (
+          <button
+            key={clave}
+            type="button"
+            className="fila-dato"
+            onClick={() =>
+              setTeclado({
+                titulo: `${texto} al mes`,
+                formato: 'dinero',
+                valor: config.gastosFijos[clave] || null,
+                permitirCero: true,
+                listo: (n) => guardar({ ...config, gastosFijos: { ...config.gastosFijos, [clave]: n } })
+              })
+            }
+          >
+            <span>{texto}</span>
+            <span className="fila-dato-valor">{dinero(config.gastosFijos[clave])}</span>
+          </button>
+        ))}
+        <button
+          type="button"
+          className="fila-dato"
+          onClick={() =>
+            setTeclado({
+              titulo: '¿Cuántos días abres al mes?',
+              formato: 'cantidad',
+              valor: config.diasAbiertosMes,
+              listo: (n) => guardar({ ...config, diasAbiertosMes: Math.min(31, Math.max(1, Math.round(n))) })
+            })
+          }
+        >
+          <span>Días que abres al mes</span>
+          <span className="fila-dato-valor">{config.diasAbiertosMes} días</span>
         </button>
       </section>
 

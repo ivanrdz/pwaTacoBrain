@@ -1,11 +1,19 @@
 // ---------- Catálogo ----------
 
+/** Cuánto de un insumo lleva una pieza del producto (en la unidad del insumo: kg, pza…) */
+export interface Ingrediente {
+  insumoId: string;
+  cantidad: number;
+}
+
 export interface Producto {
   id: string;
   nombre: string;
   precio: number;
   color: string;
   orden: number;
+  /** Receta: qué lleva cada pieza. Sirve para saber cuánto cuesta y cuánto deja. */
+  receta?: Ingrediente[];
 }
 
 // ---------- Ventas ----------
@@ -117,6 +125,8 @@ export interface MovInventario {
   cantidad: number;
   /** Solo entradas: lo que costó esa cantidad */
   costo: number;
+  /** Solo bajas: "uso" = se usó para vender; "merma" = se echó a perder o se tiró */
+  motivo?: 'uso' | 'merma';
   /** YYYY-MM-DD */
   fecha: string;
   creadoEn: string;
@@ -160,6 +170,15 @@ export interface Comisiones {
   didi: number;
 }
 
+/** Lo que se paga cada mes aunque no se venda nada */
+export interface GastosFijos {
+  renta: number;
+  gas: number;
+  luz: number;
+  sueldos: number;
+  otro: number;
+}
+
 export interface ConfigFinanzas {
   /** Porcentajes (3.5 = 3.5 %) */
   comisiones: Comisiones;
@@ -167,6 +186,12 @@ export interface ConfigFinanzas {
   bancoInicial: number;
   equipo: Equipo[];
   deudas: Deuda[];
+  /** Al mes. Si todo es 0, se usan los gastos registrados de los últimos 30 días. */
+  gastosFijos: GastosFijos;
+  /** Días que abre al mes */
+  diasAbiertosMes: number;
+  /** Ganancia que quiere sacar por semana (0 = sin meta) */
+  metaSemanal: number;
 }
 
 export const CONFIG_INICIAL: ConfigFinanzas = {
@@ -175,8 +200,24 @@ export const CONFIG_INICIAL: ConfigFinanzas = {
   cajaInicial: 0,
   bancoInicial: 0,
   equipo: [],
-  deudas: []
+  deudas: [],
+  gastosFijos: { renta: 0, gas: 0, luz: 0, sueldos: 0, otro: 0 },
+  diasAbiertosMes: 26,
+  metaSemanal: 0
 };
+
+/** Completa una configuración guardada con los valores por defecto de lo que le falte. */
+export function completarConfig(c: Partial<ConfigFinanzas> | null | undefined): ConfigFinanzas {
+  const base = c ?? {};
+  return {
+    ...CONFIG_INICIAL,
+    ...base,
+    comisiones: { ...CONFIG_INICIAL.comisiones, ...base.comisiones },
+    gastosFijos: { ...CONFIG_INICIAL.gastosFijos, ...base.gastosFijos },
+    equipo: base.equipo ?? [],
+    deudas: base.deudas ?? []
+  };
+}
 
 export function porcentajeComision(c: Comisiones, metodo: MetodoPago, canal: Canal): number {
   if (canal !== 'mostrador') return c[canal];

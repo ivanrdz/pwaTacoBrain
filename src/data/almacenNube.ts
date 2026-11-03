@@ -5,7 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { aBase64, comprimirFoto } from '../lib/imagen';
 import { fechaISO } from '../lib/fechas';
 import {
-  CONFIG_INICIAL,
+  completarConfig,
   normalizarGasto,
   normalizarVenta,
   type Almacen,
@@ -112,6 +112,7 @@ const filaMovInv = (m: MovInventario): Fila => ({
   tipo: m.tipo,
   cantidad: m.cantidad,
   costo: m.costo,
+  motivo: m.tipo === 'baja' ? (m.motivo ?? 'uso') : null,
   fecha: m.fecha,
   creado_en: m.creadoEn,
   gasto_id: m.gastoId ?? null
@@ -122,6 +123,7 @@ const aMovInv = (f: Fila): MovInventario => ({
   tipo: f.tipo as MovInventario['tipo'],
   cantidad: Number(f.cantidad),
   costo: Number(f.costo),
+  motivo: f.motivo === 'merma' ? 'merma' : f.tipo === 'baja' ? 'uso' : undefined,
   fecha: String(f.fecha),
   creadoEn: String(f.creado_en),
   gastoId: (f.gasto_id as string | null) ?? null
@@ -267,7 +269,7 @@ export function crearAlmacenNube(sb: SupabaseClient): Almacen {
       const { data, error } = await sb.from('negocios').select('config').maybeSingle();
       if (error) throw error;
       const c = (data?.config ?? {}) as Partial<ConfigFinanzas>;
-      return { ...CONFIG_INICIAL, ...c, comisiones: { ...CONFIG_INICIAL.comisiones, ...c.comisiones } };
+      return completarConfig(c);
     },
     async guardarConfig(c) {
       const id = await miId();
@@ -277,12 +279,12 @@ export function crearAlmacenNube(sb: SupabaseClient): Almacen {
     },
 
     async listarProductos() {
-      const { data, error } = await sb.from('productos').select('id,nombre,precio,color,orden').eq('activo', true).order('orden');
+      const { data, error } = await sb.from('productos').select('id,nombre,precio,color,orden,receta').eq('activo', true).order('orden');
       if (error) throw error;
-      return (data ?? []).map((p) => ({ ...p, precio: Number(p.precio) })) as Producto[];
+      return (data ?? []).map((p) => ({ ...p, precio: Number(p.precio), receta: (p.receta as Producto['receta']) ?? [] })) as Producto[];
     },
     async guardarProducto(p) {
-      const { error } = await sb.from('productos').upsert({ id: p.id, nombre: p.nombre, precio: p.precio, color: p.color, orden: p.orden, activo: true });
+      const { error } = await sb.from('productos').upsert({ id: p.id, nombre: p.nombre, precio: p.precio, color: p.color, orden: p.orden, receta: p.receta ?? [], activo: true });
       if (error) throw error;
     },
     async borrarProducto(id) {
@@ -350,7 +352,7 @@ export function crearAlmacenNube(sb: SupabaseClient): Almacen {
     async movsInventario(hasta) {
       const b = fechaISO(hasta);
       const filas = await todas((i, j) =>
-        sb.from('movs_inventario').select('id,insumo_id,tipo,cantidad,costo,fecha,creado_en,gasto_id').lt('fecha', b).order('fecha').range(i, j)
+        sb.from('movs_inventario').select('id,insumo_id,tipo,cantidad,costo,motivo,fecha,creado_en,gasto_id').lt('fecha', b).order('fecha').range(i, j)
       );
       return conCola('movs_inventario', filas.map(aMovInv), aMovInv, (m) => m.fecha < b);
     },

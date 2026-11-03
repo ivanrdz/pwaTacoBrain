@@ -3,7 +3,7 @@
 import { fechaISO } from '../lib/fechas';
 import { nuevoId } from '../lib/id';
 import {
-  CONFIG_INICIAL,
+  completarConfig,
   normalizarGasto,
   normalizarVenta,
   porcentajeComision,
@@ -81,7 +81,7 @@ export function crearAlmacenLocal(): Almacen & { cargarSemanaDeEjemplo(): Promis
     },
     async config() {
       const c = leer<Partial<ConfigFinanzas>>(K.config, {});
-      return { ...CONFIG_INICIAL, ...c, comisiones: { ...CONFIG_INICIAL.comisiones, ...c.comisiones } };
+      return completarConfig(c);
     },
     async guardarConfig(c) {
       escribir(K.config, c);
@@ -177,23 +177,30 @@ export function crearAlmacenLocal(): Almacen & { cargarSemanaDeEjemplo(): Promis
       quitar(K.movsDin, id);
     },
 
-    /** Llena los últimos 7 días con ventas, compras, inventario y gastos inventados, para la demo. */
+    /**
+     * Llena las últimas 4 semanas con datos inventados para la demo: ventas con más
+     * movimiento el fin de semana, recetas, compras (con un alza reciente de la carne),
+     * lo que se usó, algo de merma, gastos fijos y una meta.
+     */
     async cargarSemanaDeEjemplo() {
-      const productos = await this.listarProductos();
       const config = await this.config();
-      if (!config.cajaInicial && !config.equipo.length) {
-        await this.guardarConfig({
-          ...config,
-          cajaInicial: 3000,
-          bancoInicial: 15000,
-          equipo: [
-            { id: nuevoId(), nombre: 'Plancha y trompo', valor: 18000 },
-            { id: nuevoId(), nombre: 'Refrigerador', valor: 9000 }
-          ],
-          deudas: [{ id: nuevoId(), nombre: 'Préstamo para el local', saldoInicial: 12000 }]
-        });
-      }
+      await this.guardarConfig({
+        ...config,
+        cajaInicial: config.cajaInicial || 3000,
+        bancoInicial: config.bancoInicial || 15000,
+        equipo: config.equipo.length
+          ? config.equipo
+          : [
+              { id: nuevoId(), nombre: 'Plancha y trompo', valor: 18000 },
+              { id: nuevoId(), nombre: 'Refrigerador', valor: 9000 }
+            ],
+        deudas: config.deudas.length ? config.deudas : [{ id: nuevoId(), nombre: 'Préstamo para el local', saldoInicial: 12000 }],
+        gastosFijos: Object.values(config.gastosFijos).some((x) => x > 0) ? config.gastosFijos : { renta: 6500, gas: 3400, luz: 900, sueldos: 8400, otro: 600 },
+        metaSemanal: config.metaSemanal || 9000
+      });
       const comisiones = (await this.config()).comisiones;
+
+      // Insumos y su precio por unidad
       let insumos = await this.listarInsumos();
       const asegurar = (nombre: string, unidad: Insumo['unidad']) => {
         let i = insumos.find((x) => x.nombre === nombre);
@@ -204,44 +211,85 @@ export function crearAlmacenLocal(): Almacen & { cargarSemanaDeEjemplo(): Promis
         }
         return i;
       };
-      const carne = asegurar('Bistec de res', 'kg');
-      const tortilla = asegurar('Tortilla', 'kg');
+      const ins = {
+        bistec: asegurar('Bistec de res', 'kg'),
+        pastor: asegurar('Carne al pastor', 'kg'),
+        tripa: asegurar('Tripa', 'kg'),
+        tortilla: asegurar('Tortilla', 'kg'),
+        queso: asegurar('Queso', 'kg'),
+        refresco: asegurar('Refresco', 'pza')
+      };
+      const precio: Record<keyof typeof ins, number> = { bistec: 210, pastor: 150, tripa: 180, tortilla: 24, queso: 160, refresco: 12 };
+
+      // Recetas de los productos de ejemplo (por nombre)
+      const recetas: Record<string, [keyof typeof ins, number][]> = {
+        'Taco de bistec': [['bistec', 0.08], ['tortilla', 0.06]],
+        'Taco al pastor': [['pastor', 0.07], ['tortilla', 0.06]],
+        'Taco de tripa': [['tripa', 0.08], ['tortilla', 0.06]],
+        Gringa: [['pastor', 0.12], ['queso', 0.05], ['tortilla', 0.08]],
+        Refresco: [['refresco', 1]]
+      };
+      let productos = await this.listarProductos();
+      productos = productos.map((p) => (recetas[p.nombre] && !p.receta?.length ? { ...p, receta: recetas[p.nombre].map(([k, cantidad]) => ({ insumoId: ins[k].id, cantidad })) } : p));
+      escribir(K.productos, productos);
 
       const ventas: Venta[] = [];
       const gastos: Gasto[] = [];
       const movs: MovInventario[] = [];
       const hoy = new Date();
       const metodos: Venta['metodo'][] = ['efectivo', 'efectivo', 'efectivo', 'tarjeta', 'transferencia'];
-      for (let d = 7; d >= 1; d--) {
+      const azar = (n: number) => Math.floor(Math.random() * n);
+      for (let d = 28; d >= 1; d--) {
         const dia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - d);
         const fecha = fechaISO(dia);
-        const creado = (h: number) => new Date(dia.getFullYear(), dia.getMonth(), dia.getDate(), h).toISOString();
-        // Compras del día (entran al inventario)
-        const kgCarne = 8 + Math.floor(Math.random() * 4);
-        const gCarne: Gasto = { id: nuevoId(), proveedor: 'Carnes El Norte', fecha, total: kgCarne * 210, creadoEn: creado(9), categoria: 'insumos', cuenta: 'efectivo', items: [{ nombre: carne.nombre, cantidad: kgCarne, unidad: 'kg', total: kgCarne * 210 }] };
-        const gTortilla: Gasto = { id: nuevoId(), proveedor: 'Tortillería La Esperanza', fecha, total: 6 * 24, creadoEn: creado(9), categoria: 'insumos', cuenta: 'efectivo', items: [{ nombre: tortilla.nombre, cantidad: 6, unidad: 'kg', total: 6 * 24 }] };
-        gastos.push(gCarne, gTortilla);
-        movs.push({ id: nuevoId(), insumoId: carne.id, tipo: 'entrada', cantidad: kgCarne, costo: gCarne.total, fecha, creadoEn: creado(9), gastoId: gCarne.id });
-        movs.push({ id: nuevoId(), insumoId: tortilla.id, tipo: 'entrada', cantidad: 6, costo: gTortilla.total, fecha, creadoEn: creado(9), gastoId: gTortilla.id });
-        // Lo que se usó en el día
-        movs.push({ id: nuevoId(), insumoId: carne.id, tipo: 'baja', cantidad: kgCarne - 1, costo: 0, fecha, creadoEn: creado(23) });
-        movs.push({ id: nuevoId(), insumoId: tortilla.id, tipo: 'baja', cantidad: 5.5, costo: 0, fecha, creadoEn: creado(23) });
-        if (d === 6) gastos.push({ id: nuevoId(), proveedor: 'Gas del Norte', fecha, total: 850, creadoEn: creado(12), categoria: 'gas', cuenta: 'efectivo', items: [] });
-        if (d === 3) gastos.push({ id: nuevoId(), proveedor: 'Ayudante', fecha, total: 2100, creadoEn: creado(23), categoria: 'sueldos', cuenta: 'efectivo', items: [] });
+        const creado = (h: number, m = 0) => new Date(dia.getFullYear(), dia.getMonth(), dia.getDate(), h, m).toISOString();
+        const semana = (dia.getDay() + 6) % 7; // lunes = 0
+        if (semana === 0 && d > 7) continue; // descansa los lunes (menos la última semana)
 
-        const numVentas = 25 + Math.floor(Math.random() * 20);
+        // Ventas: más el viernes, sábado y domingo; hora fuerte de 8 a 10 pm
+        const usado = new Map<keyof typeof ins, number>();
+        const numVentas = (semana >= 4 ? 45 : 28) + azar(12);
         for (let n = 0; n < numVentas; n++) {
           const items = productos
             .filter(() => Math.random() < 0.45)
-            .map((p) => ({ productoId: p.id, nombre: p.nombre, precio: p.precio, cantidad: 1 + Math.floor(Math.random() * 4) }));
+            .map((p) => ({ productoId: p.id, nombre: p.nombre, precio: p.precio, cantidad: 1 + azar(4) }));
           if (!items.length) continue;
-          const total = items.reduce((s, i) => s + i.precio * i.cantidad, 0);
+          for (const it of items) for (const [k, c] of recetas[it.nombre] ?? []) usado.set(k, (usado.get(k) ?? 0) + c * it.cantidad);
+          const total = items.reduce((t, i) => t + i.precio * i.cantidad, 0);
           const deApp = Math.random() < 0.12;
           const canal: Venta['canal'] = deApp ? (['rappi', 'uber', 'didi'] as const)[n % 3] : 'mostrador';
           const metodo: Venta['metodo'] = deApp ? 'app' : metodos[n % metodos.length];
-          const hora = new Date(dia.getFullYear(), dia.getMonth(), dia.getDate(), 18 + Math.floor(Math.random() * 5), Math.floor(Math.random() * 60));
-          ventas.push({ id: nuevoId(), items, total, metodo, canal, comision: Math.round(total * porcentajeComision(comisiones, metodo, canal)) / 100, creadaEn: hora.toISOString() });
+          const hora = [18, 19, 20, 20, 21, 21, 22, 23][azar(8)];
+          ventas.push({ id: nuevoId(), items, total, metodo, canal, comision: Math.round(total * porcentajeComision(comisiones, metodo, canal)) / 100, creadaEn: creado(hora, azar(60)) });
         }
+
+        // Compras de la mañana: lo que se va a usar y un poco más. La carne subió hace dos días.
+        for (const k of Object.keys(ins) as (keyof typeof ins)[]) {
+          const uso = usado.get(k) ?? 0;
+          if (!uso) continue;
+          const cantidad = k === 'refresco' ? Math.ceil(uso / 24) * 24 : Math.ceil(uso * 1.1 * 2) / 2;
+          const unitario = k === 'bistec' && d <= 2 ? 245 : precio[k];
+          const total = Math.round(cantidad * unitario);
+          const g: Gasto = {
+            id: nuevoId(),
+            proveedor: k === 'tortilla' ? 'Tortillería La Esperanza' : k === 'refresco' ? 'Abarrotes Don Pepe' : 'Carnes El Norte',
+            fecha,
+            total,
+            creadoEn: creado(9),
+            categoria: 'insumos',
+            cuenta: 'efectivo',
+            items: [{ nombre: ins[k].nombre, cantidad, unidad: ins[k].unidad, total }]
+          };
+          gastos.push(g);
+          movs.push({ id: nuevoId(), insumoId: ins[k].id, tipo: 'entrada', cantidad, costo: total, fecha, creadoEn: creado(9), gastoId: g.id });
+          // En la noche: lo que se usó (un poco más que la receta) y a veces algo que se tiró
+          const sacado = k === 'refresco' ? uso : Math.round(uso * 1.06 * 100) / 100;
+          movs.push({ id: nuevoId(), insumoId: ins[k].id, tipo: 'baja', motivo: 'uso', cantidad: Math.min(sacado, cantidad), costo: 0, fecha, creadoEn: creado(23, 30) });
+          if (k === 'tortilla' && d % 4 === 0) movs.push({ id: nuevoId(), insumoId: ins[k].id, tipo: 'baja', motivo: 'merma', cantidad: 0.5, costo: 0, fecha, creadoEn: creado(23, 40) });
+        }
+        if (d === 26 || d === 12) gastos.push({ id: nuevoId(), proveedor: 'Gas del Norte', fecha, total: 1700, creadoEn: creado(12), categoria: 'gas', cuenta: 'efectivo', items: [] });
+        if (semana === 6) gastos.push({ id: nuevoId(), proveedor: 'Ayudante', fecha, total: 2100, creadoEn: creado(23), categoria: 'sueldos', cuenta: 'efectivo', items: [] });
+        if (d === 20) gastos.push({ id: nuevoId(), proveedor: 'Renta del local', fecha, total: 6500, creadoEn: creado(10), categoria: 'renta', cuenta: 'banco', items: [] });
       }
       escribir(K.ventas, [...leer<Venta[]>(K.ventas, []), ...ventas]);
       escribir(K.gastos, [...leer<Gasto[]>(K.gastos, []), ...gastos]);

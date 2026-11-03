@@ -15,11 +15,12 @@ Pensada para gente con poca escolaridad y en un lugar con mucho ruido:
 | Inicio | Lo vendido y gastado hoy, y botones grandes: Vender, Foto al ticket, Inventario, ¿Cómo me fue? |
 | Vender | Un botón por producto. Cada toque suma uno; el botón − quita uno. "Cobrar" pregunta cómo pagaron (efectivo, transferencia, tarjeta) o si el pedido llegó por Rappi, Uber Eats o DiDi Food, y deja 6 segundos para "Deshacer". |
 | Foto al ticket | Abre la cámara, lee proveedor, fecha, total, tipo de gasto y renglones con IA, y pide confirmar. Se elige qué se pagó (insumos, renta, gas, luz y agua, sueldos, otro) y con qué (efectivo o banco). Los renglones de insumos entran al inventario. |
-| Inventario | Lo que hay guardado y cuánto vale. "Sacar" da de baja lo que se usó en el día; eso es el costo de lo vendido. |
+| Inventario | Lo que hay guardado y cuánto vale. "Sacar" da de baja lo que se usó en el día (costo de lo vendido) y "Se echó a perder" anota la merma. |
 | ¿Cómo me fue? | Toca el micrófono y pregunta: "¿cómo me fue esta semana?", "¿cuánto gasté ayer?", "¿qué fue lo que más vendí este mes?". |
 | Mis números | Estado de resultados y balance general, explicados sencillo, y "PDF para el contador" con formato contable. |
+| Mi negocio | Consejos con las últimas 4 semanas: meta semanal, cuánto vender al día para no perder, cuánto apartar, alertas de precios con precio sugerido, cuánto deja cada producto, si conviene cada app, mejores días y horas, y merma. |
 | Caja y cuentas | Comisiones de banco y apps, con cuánto dinero se empezó, equipo, deudas (con abonos) y retiros del dueño. |
-| Mis productos | Nombre de la taquería, productos con precio y color del botón. |
+| Mis productos | Nombre de la taquería, productos con precio, color del botón y receta (qué lleva cada uno, en gramos o piezas). |
 
 ## Cómo se calculan los números
 
@@ -27,7 +28,21 @@ Pensada para gente con poca escolaridad y en un lugar con mucho ruido:
 - **Estado de resultados:** Ventas − comisiones = ventas netas; − costo de ventas = utilidad bruta; − renta, gas, luz y agua, sueldos y otros = utilidad neta.
 - **Costo de ventas:** lo que se *saca* del inventario, valuado a costo promedio. Las compras de insumos sin renglones cuentan directo como costo.
 - **Balance general:** caja y banco (lo inicial + ventas netas − gastos − retiros − abonos), inventario, equipo; deudas (saldo inicial − abonos); capital = lo aportado + utilidades acumuladas − retiros. Siempre cuadra.
+- **Merma:** lo que se anota como "Se echó a perder" también es costo de ventas y sale como renglón propio.
 - Sin depreciación de equipo y con IVA incluido. Es informativo; no sustituye a la contabilidad formal.
+
+## Mi negocio: cómo se calcula cada consejo
+
+Usa las últimas 4 semanas.
+
+- **Cuánto deja cada producto:** costo de la receta con el costo promedio de cada insumo en el inventario; ganancia = precio − costo.
+- **Alertas de precios:** compara la última compra de cada insumo (de los últimos 14 días) contra el promedio de los 30 días anteriores. Si subió 5 % o más, dice cuánto baja la ganancia de cada producto que lo lleva y el precio para conservar el mismo porcentaje de ganancia.
+- **Apps:** de cada $100 vendidos, lo que queda después de comisión e insumos (con receta, o con la proporción de costo del periodo si no tiene).
+- **Para no perder dinero (punto de equilibrio):** gastos fijos al mes ÷ lo que queda de cada peso vendido después de insumos y comisiones, repartido entre los días que abre. Usa los gastos fijos anotados en *Caja y cuentas*; si no hay, los registrados en los últimos 30 días.
+- **Aparta cada día:** cada gasto fijo ÷ días que abre al mes.
+- **Mejores días y horas:** venta promedio por día de la semana y venta por hora; cuánto se usa de cada insumo según el día.
+- **Lo que se pierde:** lo anotado como merma, más lo que se sacó del inventario por encima de lo que dicen las recetas para lo vendido (funciona mejor si todos los productos tienen receta).
+- **Meta de la semana:** ganancia de la semana contra la meta, y cuánto vender al día los días que quedan.
 
 ## Arrancar en tu compu (modo demo)
 
@@ -42,7 +57,7 @@ npm run dev
 
 Abre la dirección que aparece (por ejemplo `http://localhost:5173`). Para probarla en el celular, conéctalo a la misma red WiFi y abre la dirección "Network" que imprime Vite.
 
-En **Mis productos → Llenar con una semana de ejemplo** se cargan ventas y gastos inventados para que el reporte tenga números.
+En **Mis productos → Llenar con un mes de ejemplo** se cargan 4 semanas de ventas, compras, recetas, inventario, merma y gastos fijos inventados, para que los reportes y *Mi negocio* tengan números.
 
 > La cámara y el micrófono del celular solo funcionan en HTTPS (o en `localhost`). Para probarlos en el celular, publícala en Vercel (abajo) o usa un túnel como `cloudflared`.
 
@@ -55,7 +70,7 @@ npm run revisar
 ## Modo nube (Supabase)
 
 1. Crea un proyecto en [supabase.com](https://supabase.com).
-2. Crea las tablas: en el **SQL Editor** ejecuta, en orden, los tres archivos de `supabase/migrations/` (`…_inicio.sql`, `…_finanzas_inventario.sql`, `…_seguridad.sql`). (O con la CLI: `supabase link --project-ref <ref>` y `supabase db push`.)
+2. Crea las tablas: en el **SQL Editor** ejecuta, en orden, los cuatro archivos de `supabase/migrations/` (`…_inicio.sql`, `…_finanzas_inventario.sql`, `…_seguridad.sql`, `…_decisiones.sql`). (O con la CLI: `supabase link --project-ref <ref>` y `supabase db push`.)
 3. **Apaga el registro abierto:** Authentication → Sign In / Providers → desactiva "Allow new users to sign up". Las cuentas de cada taquería las creas tú en Authentication → Users → Add user.
 4. Publica la función que lee los tickets y guarda sus secretos (en Supabase, nunca en el repo):
 
@@ -119,7 +134,7 @@ En el celular, abre la página y elige **"Agregar a pantalla de inicio"** para i
 ```
 src/
   App.tsx                 navegación entre pantallas y sesión
-  pantallas/              Inicio, Vender, FotoTicket, Inventario, Reporte, Numeros, Dinero, Productos, Entrar
+  pantallas/              Inicio, Vender, FotoTicket, Inventario, Reporte, Numeros, MiNegocio, Dinero, Productos, Entrar
   componentes/            Icono, Encabezado, TecladoNumerico, EditorRenglon
   data/
     tipos.ts              tipos y la interfaz Almacen
@@ -129,6 +144,7 @@ src/
     operaciones.ts        guardar compras al inventario y calcular los números
   lib/
     finanzas.ts           inventario, estado de resultados y balance general
+    decisiones.ts         consejos de Mi negocio (recetas, precios, apps, equilibrio, merma, meta)
     reportes.ts           la frase que se dice en voz
     fechas.ts             hoy, ayer, semana (de lunes a domingo), mes
     voz.ts                reconocimiento y síntesis de voz del navegador

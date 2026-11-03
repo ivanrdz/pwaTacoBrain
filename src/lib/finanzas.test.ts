@@ -57,6 +57,18 @@ describe('valuarInventario', () => {
     expect(valuarInventario([bistec], movs).costoBajas).toBe(2200);
   });
 
+  it('separa lo que se echó a perder y lo cuenta como costo', () => {
+    const movs = [mov('1', 'entrada', 10, 2000, '2026-10-20'), mov('2', 'baja', 4, 0, '2026-10-20'), { ...mov('3', 'baja', 1, 0, '2026-10-20'), motivo: 'merma' as const }];
+    const v = valuarInventario([bistec], movs);
+    expect(v.costoBajas).toBe(800);
+    expect(v.costoMerma).toBe(200);
+    expect(v.porInsumo[0].existencia).toBe(5);
+    const er = estadoResultados([venta('1', 2000, 'efectivo', 'mostrador', 0)], [], v.costoBajas, v.costoMerma);
+    expect(er.merma).toBe(200);
+    expect(er.costoVentas).toBe(1000);
+    expect(er.utilidadNeta).toBe(1000);
+  });
+
   it('no deja el inventario en negativo y avisa', () => {
     const v = valuarInventario([bistec], [mov('1', 'entrada', 2, 400, '2026-10-20'), mov('2', 'baja', 5, 0, '2026-10-20')]);
     expect(v.porInsumo[0].existencia).toBe(0);
