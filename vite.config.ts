@@ -1,10 +1,20 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { rm } from 'node:fs/promises';
 
 export default defineConfig({
   plugins: [
     react(),
+    {
+      // Los README de public/ documentan el código; no se publican en el sitio.
+      name: 'sin-readme-en-dist',
+      apply: 'build',
+      async closeBundle() {
+        await rm('dist/README.md', { force: true });
+        await rm('dist/icons/README.md', { force: true });
+      }
+    },
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icons/icon.svg', 'icons/apple-touch-icon.png'],
